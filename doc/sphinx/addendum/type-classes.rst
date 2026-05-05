@@ -653,7 +653,7 @@ Settings
    of goals.  Setting this :term:`option` to 1 or 2 turns on the :flag:`Typeclasses Debug` flag; setting this
    option to 0 turns that flag off.
 
-   Note that the tactics shown when :n:`@natural > 0`(after removing tactics that were
+   Note that the tactics shown when :n:`@natural > 0` (after removing tactics that were
    backtracked) may not always work as a replacement for the proof search
    tactic.  See :ref:`here <info_auto_not_exact>`.
 
