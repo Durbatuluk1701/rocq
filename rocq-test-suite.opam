@@ -26,6 +26,7 @@ bug-reports: "https://github.com/rocq-prover/rocq/issues"
 depends: [
   "dune" {>= "3.8"}
   "rocq-core" {= version}
+  "rocqformat" {= version}
   "coqide-server"
   "ounit2"
   "conf-python-3"
