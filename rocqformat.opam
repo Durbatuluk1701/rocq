@@ -27,6 +27,7 @@ bug-reports: "https://github.com/rocq-prover/rocq/issues"
 depends: [
   "dune" {>= "3.8"}
   "rocq-runtime" {= version}
+  "ounit2" {with-test}
   "odoc" {with-doc}
 ]
 build: [

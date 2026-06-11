@@ -1,0 +1,9 @@
+(test
+ (name layout_test)
+ (package rocqformat)
+ (libraries rocqformat_lib ounit2))
+
+(test
+ (name format_test)
+ (package rocqformat)
+ (libraries ounit2 unix))

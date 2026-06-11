@@ -57,7 +57,8 @@ prelude, now living in the rocq-core package."))
 (package
  (name rocqformat)
  (depends
-  (rocq-runtime (= :version)))
+  (rocq-runtime (= :version))
+  (ounit2 :with-test))
  (synopsis "Automatic formatter for Rocq source files")
  (description "rocqformat is an automatic formatter for Rocq source files (.v),
 similar in spirit to ocamlformat. It reuses Rocq's extensible parser (Procq)
@@ -171,6 +172,7 @@ development of interactive proofs."))
  (allow_empty)
  (depends
   (rocq-core (= :version))
+  (rocqformat (= :version))
   coqide-server
   ounit2
   conf-python-3
