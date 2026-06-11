@@ -54,6 +54,25 @@ Note that in this setup, Rocq needs to be started with the -boot and
 prelude, now living in the rocq-core package."))
 
 (package
+ (name rocqformat)
+ (depends
+  (rocq-runtime (= :version)))
+ (synopsis "Automatic formatter for Rocq source files")
+ (description "rocqformat is an automatic formatter for Rocq source files (.v),
+similar in spirit to ocamlformat. It reuses Rocq's extensible parser (Procq)
+and vernacular pretty-printer (Ppvernac) to ensure syntactic correctness
+and compatibility with Rocq's grammar, including notations and plugin syntax.
+
+Typical usage:
+
+  rocqformat file.v              # print formatted file to stdout
+  rocqformat -i file.v           # format in place
+  rocqformat --check file.v      # check formatting without modifying
+
+Pass standard Rocq options (-R, -Q, -boot, -noinit, ...) when formatting
+files that depend on a particular load path or prelude configuration."))
+
+(package
  (name rocq-devtools)
  (depends
   (rocq-runtime (= :version))

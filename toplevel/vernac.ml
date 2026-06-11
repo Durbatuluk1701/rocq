@@ -24,7 +24,7 @@ let checknav { CAst.loc; v = { expr } }  =
   if is_navigation_vernac expr && not (is_reset expr) then
     CErrors.user_err ?loc (str "Navigation commands forbidden in files.")
 
-let vernac_beautify fmt ast comments =
+let format_ast fmt ast comments =
   try
   Pputils.beautify_comments := comments;
   let loc = Option.cata Loc.unloc (0,0) ast.CAst.loc in
@@ -125,7 +125,7 @@ let load_vernac_core ~beautify ~check ~state ?source file =
       state
     | Some ast ->
       let () = beautify |> Option.iter @@ fun beautify ->
-        vernac_beautify beautify ast (Procq.Parsable.comments in_pa);
+        format_ast beautify ast (Procq.Parsable.comments in_pa);
         Procq.Parsable.drop_comments in_pa
       in
 
@@ -202,6 +202,9 @@ let open_beautify filename =
   let chan_beautify = open_out (filename^beautify_suffix) in
   let fmt = set_formatter_translator chan_beautify in
   fmt, fun () -> Format.pp_print_flush fmt(); close_out chan_beautify
+
+let format_file ~output ~check ~state ?source filename =
+  load_vernac_core ~beautify:(Some output) ~check ~state ?source filename
 
 (* Main driver for file loading. For now, we only do one beautify
    pass. *)

@@ -30,6 +30,20 @@ end
     state. *)
 val process_expr : state:State.t -> Vernacexpr.vernac_control -> State.t
 
+(** [format_ast fmt ast comments] Pretty-prints a parsed vernacular command
+    to [fmt], preserving comments from the parser. *)
+val format_ast :
+  Format.formatter -> Vernacexpr.vernac_control ->
+  ((int * int) * string) list -> unit
+
+(** [format_file ~output ~check ~state file] Parses [file] using Rocq's
+    parser, optionally interprets commands to keep grammar state in sync,
+    and pretty-prints each command to [output]. When [check] is [false],
+    type-checking is skipped (as with [rocq compile -vos]). *)
+val format_file :
+  output:Format.formatter -> check:bool -> state:State.t ->
+  ?source:Loc.source -> string -> State.t
+
 (** [load_vernac sid file] Loads [file] on top of [sid].
     Callers are expected to handle and print errors in form of exceptions. *)
 val load_vernac : ?beautify:bool -> check:bool ->
