@@ -34,6 +34,9 @@ val process_expr : state:State.t -> Vernacexpr.vernac_control -> State.t
 type format_layout = {
   box_level : int;
   extra_blank_line : bool;
+  (** When [true], interpretation errors on a command do not abort formatting
+      of subsequent commands. Already pretty-printed commands are preserved. *)
+  continue_on_error : bool;
 }
 
 val default_format_layout : format_layout

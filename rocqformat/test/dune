@@ -7,3 +7,8 @@
  (name format_test)
  (package rocqformat)
  (libraries ounit2 unix))
+
+(test
+ (name lib_api_test)
+ (package rocqformat)
+ (libraries rocqformat_lib ounit2))

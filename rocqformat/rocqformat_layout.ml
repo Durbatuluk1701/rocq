@@ -17,6 +17,7 @@ type t = {
   max_boxes : int;
   box_level : int;
   extra_blank_line : bool;
+  continue_on_error : bool;
 }
 
 let default = {
@@ -25,6 +26,7 @@ let default = {
   max_boxes = 10000;
   box_level = 0;
   extra_blank_line = true;
+  continue_on_error = false;
 }
 
 let max_indent_of_margin margin =
@@ -42,7 +44,10 @@ let configure_formatter layout fmt =
   Format.pp_set_ellipsis_text fmt "..."
 
 let to_vernac_layout layout : Vernac.format_layout =
-  { box_level = layout.box_level; extra_blank_line = layout.extra_blank_line }
+  { box_level = layout.box_level
+  ; extra_blank_line = layout.extra_blank_line
+  ; continue_on_error = layout.continue_on_error
+  }
 
 (** Normalize formatted text: trim trailing whitespace, ensure a single
     final newline, and collapse runs of more than two blank lines. *)

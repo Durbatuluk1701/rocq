@@ -3,3 +3,4 @@ cases/*/_run/
 cases_prelude/*/_run/
 cases/_cli/
 cases_prelude/_prelude_check/
+cases/partial_format/_partial_cli/

@@ -119,4 +119,4 @@ let format_file opts stm_options injections ?layout ~output ~f_in =
   let state = Load.load_init_vernaculars opts ~state in
   let ldir = Stm.get_ldir ~doc:state.doc in
   let source = source ldir long_f_dot_in in
-  ignore (Vernac.format_file ?layout ~output ~check:false ~state ~source long_f_dot_in)
+  ignore (Vernac.format_file ?layout ~output ~check:true ~state ~source long_f_dot_in)
