@@ -1,5 +1,5 @@
 Inductive nat : Set :=
   | O : _
   | S : forall n : nat, _.
-
-Definition foo : nat := O.
+Definition a : nat := O.
+Definition b : nat := O.
