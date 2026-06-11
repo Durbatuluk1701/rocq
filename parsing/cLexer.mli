@@ -102,3 +102,4 @@ module LexerDiff :
    and type 'c pattern = 'c Tok.p
 
 val record_comments : bool ref
+val lex_trailing_on_current_line : Loc.t -> (unit, char) Gramlib.Stream.t -> Loc.t

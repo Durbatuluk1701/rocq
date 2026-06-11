@@ -34,3 +34,13 @@ $ROCQFORMAT -q -boot -noinit test.v > test.formatted.real
 diff ../test.formatted test.formatted.real
 
 $ROCQFORMAT -q -boot -noinit --check test.v
+
+cd ..
+cp comments-unformatted.v _test/comments.v
+cd _test
+
+$ROCQFORMAT -q -boot -noinit comments.v > comments.formatted.real
+
+diff ../comments.formatted comments.formatted.real
+
+$ROCQFORMAT -q -boot -noinit --check ../comments.v

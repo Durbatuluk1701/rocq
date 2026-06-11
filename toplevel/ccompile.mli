@@ -17,4 +17,5 @@ val compile_file : Coqargs.t -> Stm.AsyncOpts.stm_opt -> Coqcargs.t -> Coqargs.i
     ([check:false]); partial output may be produced before an error. *)
 val format_file :
   Coqargs.t -> Stm.AsyncOpts.stm_opt -> Coqargs.injection_command list ->
+  ?layout:Vernac.format_layout ->
   output:Format.formatter -> f_in:string -> unit
