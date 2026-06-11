@@ -104,3 +104,38 @@ let compile_file opts stm_opts copts injections f_in =
 
 let compile_file opts stm_opts copts injections =
   Option.iter (compile_file opts stm_opts copts injections) copts.compile_file
+
+let format_file opts stm_options injections ~output ~f_in =
+  let open Vernac.State in
+  let long_f_dot_in, long_f_dot_out =
+    ensure_exists_with_prefix ~src:f_in ~tgt:None ~src_ext:".v" ~tgt_ext:".vo" in
+  CLexer.record_comments := true;
+  let doc, sid =
+    Topfmt.(in_phase ~phase:LoadingPrelude) (fun () ->
+        Stm.new_doc Stm.{ doc_type = VoDoc long_f_dot_out; injections })
+      ()
+  in
+  let state = { doc; sid; proof = None; time = None } in
+  let state = Load.load_init_vernaculars opts ~state in
+  let ldir = Stm.get_ldir ~doc:state.doc in
+  let source = source ldir long_f_dot_in in
+  let beautified = long_f_dot_in ^ ".beautified" in
+  let status =
+    try
+      ignore (Vernac.load_vernac ~beautify:true ~check:false ~state ~source long_f_dot_in);
+      `Ok
+    with exn -> `Error exn
+  in
+  if Sys.file_exists beautified then begin
+    let ic = open_in_bin beautified in
+    let len = in_channel_length ic in
+    let buf = Bytes.create len in
+    really_input ic buf 0 len;
+    close_in ic;
+    Sys.remove beautified;
+    Format.pp_print_string output (Bytes.to_string buf);
+    Format.pp_print_flush output ()
+  end;
+  match status with
+  | `Ok -> ()
+  | `Error exn -> raise exn

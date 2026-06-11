@@ -41,6 +41,7 @@ type subcommand =
   | Tex
   | Makefile
   | Timelog2Html
+  | Format
 
 let subcommands = [
   ("compile", "Compile a Rocq source file", Compile);
@@ -61,6 +62,7 @@ let subcommands = [
   ("tex", "Process Rocq code in a Latex document", Tex);
   ("makefile", "Generate a Makefile to compile a Rocq project", Makefile);
   ("timelog2html", "Combine timing information and a Rocq source file", Timelog2Html);
+  ("format", "Format Rocq source files", Format);
 ]
 
 let print_usage fmt () =
@@ -100,6 +102,7 @@ let run_subcommand opts args = function
   | Tex -> Rocqtex.main ~prog:(Sys.argv.(0) ^ " tex") args
   | Makefile -> Rocqmakefile.main ~prog:[Sys.argv.(0); "makefile"] args
   | Timelog2Html -> with_worker_gen opts ~package:"rocq-devtools" "timelog2html" args
+  | Format -> with_worker_gen opts ~package:"rocqformat" "rocqformat" args
 
 let () =
   if Array.length Sys.argv < 2 then error_usage ();

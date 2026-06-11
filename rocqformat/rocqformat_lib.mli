@@ -8,13 +8,6 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** [compile_file opts] compile file specified in [opts] *)
-val compile_file : Coqargs.t -> Stm.AsyncOpts.stm_opt -> Coqcargs.t -> Coqargs.injection_command list -> unit
-
-(** [format_file opts stm_options injections ~output f_in] parses and pretty-prints
-    [f_in] to [output] using Rocq's vernacular printer, reusing the same
-    document setup as compilation. Interpretation runs without type-checking
-    ([check:false]); partial output may be produced before an error. *)
-val format_file :
-  Coqargs.t -> Stm.AsyncOpts.stm_opt -> Coqargs.injection_command list ->
-  output:Format.formatter -> f_in:string -> unit
+(** [run args] parses [args], initializes Rocq like [rocq compile], and formats
+    the given [.v] files using Rocq's parser and vernacular printer. *)
+val run : string list -> unit
