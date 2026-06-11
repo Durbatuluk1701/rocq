@@ -27,11 +27,13 @@ let checknav { CAst.loc; v = { expr } }  =
 type format_layout = {
   box_level : int;
   extra_blank_line : bool;
+  continue_on_error : bool;
 }
 
 let default_format_layout = {
   box_level = 0;
   extra_blank_line = true;
+  continue_on_error = false;
 }
 
 let active_format_layout = ref default_format_layout
@@ -172,6 +174,7 @@ let load_vernac_core ~beautify ~check ~state ?source file =
 
       checknav ast;
 
+      let prev_state = state in
       let state =
         try_finally
           (fun () ->
@@ -184,13 +187,19 @@ let load_vernac_core ~beautify ~check ~state ?source file =
                    [("cmd", `String (Pp.string_of_ppcmds (Topfmt.pr_cmd_header ast)));
                     ("line", `String lnum)])
                (fun () ->
-             Flags.silently (interp_vernac ~check ~state) ast) ())
+                  if !active_format_layout.continue_on_error then
+                    (try Flags.silently (interp_vernac ~check ~state:prev_state) ast
+                     with reraise ->
+                       let reraise, info = Exninfo.capture reraise in
+                       Feedback.msg_warning (CErrors.iprint (reraise, info));
+                       prev_state)
+                  else
+                    Flags.silently (interp_vernac ~check ~state:prev_state) ast)
+               ())
           ()
           (fun () ->
              let tend = System.get_time () in
-             (* The -time option is only supported from console-based clients
-                due to the way it prints. *)
-             emit_time state ast tstart tend)
+             emit_time prev_state ast tstart tend)
           ()
       in
 

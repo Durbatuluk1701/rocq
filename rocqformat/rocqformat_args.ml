@@ -37,6 +37,7 @@ rocqformat specific options:\
 \n  --depth=boxes         set maximum box depth for pretty-printing (default 10000)\
 \n  --box-level=n         set box level for top-level commands (default 0)\
 \n  --no-extra-blank-lines  do not insert an extra blank line between commands\
+\n  --continue-on-error     keep formatting after command interpretation errors\
 \n\
 \nrocqformat uses Rocq's parser and pretty-printer. Pass standard Rocq\
 \noptions (-R, -Q, -boot, -noinit, ...) before the file names.\
@@ -64,6 +65,8 @@ let rec parse acc = function
       exit 0
   | "-i" :: rest | "--in-place" :: rest -> parse { acc with in_place = true } rest
   | "--check" :: rest -> parse { acc with check_only = true } rest
+  | "--continue-on-error" :: rest ->
+      parse (update_layout acc (fun l -> { l with continue_on_error = true })) rest
   | "-o" :: file :: rest -> parse { acc with output = Some file } rest
   | "--output" :: file :: rest | "-output" :: file :: rest ->
       parse { acc with output = Some file } rest

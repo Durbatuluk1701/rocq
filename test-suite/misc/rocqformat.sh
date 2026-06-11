@@ -72,14 +72,33 @@ run_case_smoke() {
   # shellcheck disable=SC2086
   $COQC $compile_args "$workdir/compile.v"
 
-  # Formatting must be idempotent on formatted output.
+  # Strict idempotency on formatted output (including a third pass).
   # shellcheck disable=SC2086
   $ROCQFORMAT $format_args $extra_args "$workdir/output.v" \
     > "$workdir/output2.v"
   diff "$workdir/output.v" "$workdir/output2.v"
+  # shellcheck disable=SC2086
+  $ROCQFORMAT $format_args $extra_args "$workdir/output2.v" \
+    > "$workdir/output3.v"
+  diff "$workdir/output2.v" "$workdir/output3.v"
 
   # shellcheck disable=SC2086
   $ROCQFORMAT $format_args $extra_args --check "$workdir/output.v"
+}
+
+vo_basename() {
+  base=$(basename "$1" .v)
+  echo "${base}.vo"
+}
+
+# Compare logical content of two .glob files, ignoring source locations and
+# the location-sensitive digest header.
+compare_glob_semantics() {
+  glob_a="$1"
+  glob_b="$2"
+  sed 's/[0-9]*:[0-9]*//g' "$glob_a" | tail -n +2 > "$workdir/glob_a.norm"
+  sed 's/[0-9]*:[0-9]*//g' "$glob_b" | tail -n +2 > "$workdir/glob_b.norm"
+  diff "$workdir/glob_a.norm" "$workdir/glob_b.norm"
 }
 
 run_case() {
@@ -92,6 +111,9 @@ run_case() {
   extra_args=""
   if [ -f "$case_dir/args" ]; then
     extra_args=$(cat "$case_dir/args")
+  fi
+  if [ -f "$case_dir/no_compile" ]; then
+    compile_enabled=no
   fi
 
   workdir="$case_dir/_run"
@@ -111,6 +133,17 @@ run_case() {
       echo "rocqformat: COQC not found, cannot compile $case_name"
       exit 1
     fi
+    sem_dir="$workdir/semantic"
+    rm -rf "$sem_dir"
+    mkdir -p "$sem_dir"
+    cp "$workdir/input.v" "$sem_dir/Invariance.v"
+    # shellcheck disable=SC2086
+    $COQC $compile_args "$sem_dir/Invariance.v"
+    cp "$sem_dir/Invariance.glob" "$sem_dir/baseline.glob"
+    cp "$workdir/output.v" "$sem_dir/Invariance.v"
+    # shellcheck disable=SC2086
+    $COQC $compile_args "$sem_dir/Invariance.v"
+    compare_glob_semantics "$sem_dir/baseline.glob" "$sem_dir/Invariance.glob"
     cp "$workdir/output.v" "$workdir/compile.v"
     # shellcheck disable=SC2086
     $COQC $compile_args "$workdir/compile.v"
@@ -123,6 +156,16 @@ run_case() {
     # shellcheck disable=SC2086
     $COQC $compile_args "$workdir/recompile.v"
   fi
+
+  # Strict idempotency: f(f(x)) = f(x) and f(f(f(x))) = f(x).
+  # shellcheck disable=SC2086
+  $ROCQFORMAT $format_args $extra_args "$workdir/output.v" \
+    > "$workdir/output2.v"
+  diff "$workdir/output.v" "$workdir/output2.v"
+  # shellcheck disable=SC2086
+  $ROCQFORMAT $format_args $extra_args "$workdir/output2.v" \
+    > "$workdir/output3.v"
+  diff "$workdir/output2.v" "$workdir/output3.v"
 
   # Formatting must be idempotent on the golden file.
   cp "$case_dir/expected.v" "$workdir/idempotent.v"
@@ -195,4 +238,23 @@ printf 'Definition   x:=0.\n' > "$cli_dir/bad.v"
 if $ROCQFORMAT $BOOT_FORMAT_ARGS --check "$cli_dir/bad.v" >/dev/null 2>&1; then
   echo "rocqformat: expected --check to fail on badly formatted file"
   exit 1
+fi
+
+# Partial formatting: without --continue-on-error, a file with a failing command
+# must abort; with the flag, valid commands are still formatted.
+partial_dir=cases/partial_format
+if [ -d "$partial_dir" ]; then
+  partial_work="$partial_dir/_partial_cli"
+  rm -rf "$partial_work"
+  mkdir -p "$partial_work"
+  cp "$partial_dir/input.v" "$partial_work/input.v"
+  if $ROCQFORMAT $BOOT_FORMAT_ARGS "$partial_work/input.v" \
+      > "$partial_work/no_flag.out" 2>/dev/null; then
+    echo "rocqformat: expected formatting to fail without --continue-on-error"
+    exit 1
+  fi
+  # shellcheck disable=SC2086
+  $ROCQFORMAT $BOOT_FORMAT_ARGS --continue-on-error "$partial_work/input.v" \
+    > "$partial_work/with_flag.out"
+  diff "$partial_dir/expected.v" "$partial_work/with_flag.out"
 fi

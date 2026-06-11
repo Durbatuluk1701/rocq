@@ -10,6 +10,14 @@
 
 type format_config = Rocqformat_args.t
 
+module Layout = Rocqformat_layout
+
+let default_layout = Layout.default
+
+let boot_coqargs =
+  { Coqargs.default with
+    pre = { Coqargs.default.pre with boot = true; load_init = false } }
+
 let read_file path =
   let ic = open_in_bin path in
   let len = in_channel_length ic in
@@ -99,5 +107,36 @@ let custom_rocqformat :
     run = rocqformat_run;
     initial_args = Coqargs.default;
   }
+
+let initialized = ref false
+
+let stm_opts = Stm.AsyncOpts.default_opts ~spawn_args:[]
+
+let init () =
+  if not !initialized then begin
+    Coqinit.init_ocaml ();
+    Stm.init_process stm_opts;
+    Coqinit.init_runtime ~usage:Rocqformat_args.usage boot_coqargs;
+    Coqinit.init_document boot_coqargs;
+    Stm.init_core ();
+    Flags.quiet := true;
+    System.trust_file_cache := true;
+    Colors.init_color `ON;
+    initialized := true
+  end
+
+let format_file ?(layout=Rocqformat_layout.default) ?(continue_on_error=false) file =
+  let layout = { layout with continue_on_error } in
+  init ();
+  Rocqformat_layout.apply_globals layout;
+  format_to_string layout boot_coqargs stm_opts [] file
+
+let check_file ?(layout=Rocqformat_layout.default) ?(continue_on_error=false) file =
+  let layout = { layout with continue_on_error } in
+  init ();
+  Rocqformat_layout.apply_globals layout;
+  let original = read_file file in
+  let formatted = format_file ~layout ~continue_on_error file in
+  String.equal original formatted
 
 let run args = Coqtop.start_coq custom_rocqformat args
