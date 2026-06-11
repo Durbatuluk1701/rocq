@@ -1,6 +1,6 @@
 (library
  (name rocqformat_lib)
- (modules rocqformat_lib rocqformat_args)
+ (modules rocqformat_lib rocqformat_args rocqformat_layout)
  (libraries rocq-runtime.toplevel rocq-runtime.coqargs))
 
 (executable

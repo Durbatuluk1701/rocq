@@ -52,6 +52,8 @@ module type S = sig
 
     val drop_comments : t -> unit
 
+    val lex_trailing_on_current_line : t -> unit
+
     val loc : t -> Loc.t
     (** [loc pa] Return parsing position for [pa] *)
 
@@ -1565,7 +1567,8 @@ module Parsable = struct
 
   type t =
     { pa_tok_strm : (L.keyword_state,L.te) LStream.t
-    ; lexer_state : L.State.t ref }
+    ; lexer_state : L.State.t ref
+    ; char_stream : (unit, char) Stream.t }
 
   let parse_parsable gstate entry p =
     let efun = start_parser_of_entry gstate entry 0 in
@@ -1617,11 +1620,17 @@ module Parsable = struct
     L.State.set !lexer_state;
     let ts = L.tok_func ?loc cs in
     lexer_state := L.State.get ();
-    {pa_tok_strm = ts; lexer_state}
+    {pa_tok_strm = ts; lexer_state; char_stream = cs}
 
   let comments p = L.State.get_comments !(p.lexer_state)
 
   let drop_comments p = p.lexer_state := L.State.drop_comments !(p.lexer_state)
+
+  let lex_trailing_on_current_line p =
+    L.State.set !(p.lexer_state);
+    let loc = LStream.current_loc p.pa_tok_strm in
+    ignore (L.lex_trailing_on_current_line loc p.char_stream);
+    p.lexer_state := L.State.get ()
 
   let loc t = LStream.current_loc t.pa_tok_strm
   let consume { pa_tok_strm } len kwstate = LStream.njunk kwstate len pa_tok_strm

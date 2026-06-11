@@ -18,59 +18,64 @@ let read_file path =
   close_in ic;
   Bytes.to_string buf
 
-let make_formatter ?(margin=80) chan =
+let make_formatter layout chan =
   let out s b e = output_substring chan s b e in
   let fmt = Format.make_formatter out (fun () -> flush chan) in
-  Format.pp_set_margin fmt margin;
-  Format.pp_set_max_boxes fmt max_int;
+  Rocqformat_layout.configure_formatter layout fmt;
   fmt
 
-let formatter_to_string ?(margin=80) f =
+let formatter_to_string layout f =
   let buf = Buffer.create 1024 in
   let out s b e = Buffer.add_substring buf s b e in
   let fmt = Format.make_formatter out (fun () -> ()) in
-  Format.pp_set_margin fmt margin;
-  Format.pp_set_max_boxes fmt max_int;
+  Rocqformat_layout.configure_formatter layout fmt;
   f fmt;
   Format.pp_print_flush fmt ();
-  Buffer.contents buf
+  Rocqformat_layout.normalize_output (Buffer.contents buf)
 
-let format_to_string ~margin opts stm_opts injections file =
-  formatter_to_string ~margin (fun fmt ->
-      Ccompile.format_file opts stm_opts injections ~output:fmt ~f_in:file)
+let format_to_string layout opts stm_opts injections file =
+  let vernac_layout = Rocqformat_layout.to_vernac_layout layout in
+  formatter_to_string layout (fun fmt ->
+      Ccompile.format_file opts stm_opts injections ~layout:vernac_layout
+        ~output:fmt ~f_in:file)
 
-let format_to_channel ~margin opts stm_opts injections file ch =
-  let fmt = make_formatter ~margin ch in
-  Ccompile.format_file opts stm_opts injections ~output:fmt ~f_in:file;
+let format_to_channel layout opts stm_opts injections file ch =
+  let fmt = make_formatter layout ch in
+  let vernac_layout = Rocqformat_layout.to_vernac_layout layout in
+  Ccompile.format_file opts stm_opts injections ~layout:vernac_layout
+    ~output:fmt ~f_in:file;
   Format.pp_print_flush fmt ()
 
-let format_to_file ~margin opts stm_opts injections file output =
+let format_to_file layout opts stm_opts injections file output =
+  let content = format_to_string layout opts stm_opts injections file in
   let oc = open_out_bin output in
-  Util.try_finally (fun () ->
-      format_to_channel ~margin opts stm_opts injections file oc)
-    () (fun () -> close_out oc) ()
+  output_string oc content;
+  close_out oc
 
 let process_file (fmt : Rocqformat_args.t) opts stm_opts injections file =
+  let layout = fmt.layout in
   if fmt.check_only then begin
     let original = read_file file in
-    let formatted = format_to_string ~margin:fmt.margin opts stm_opts injections file in
+    let formatted = format_to_string layout opts stm_opts injections file in
     if not (String.equal original formatted) then (
       Printf.eprintf "rocqformat: %s needs formatting\n%!" file;
       exit 1)
   end else if fmt.in_place then begin
-    let tmp = Filename.temp_file (Filename.basename file) ".rocqformat" in
-    format_to_file ~margin:fmt.margin opts stm_opts injections file tmp;
-    Sys.rename tmp file
+    format_to_file layout opts stm_opts injections file file
   end else
     match fmt.output with
-    | Some out -> format_to_file ~margin:fmt.margin opts stm_opts injections file out
-    | None -> format_to_channel ~margin:fmt.margin opts stm_opts injections file stdout
+    | Some out -> format_to_file layout opts stm_opts injections file out
+    | None ->
+        let content = format_to_string layout opts stm_opts injections file in
+        output_string stdout content;
+        flush stdout
 
-let rocqformat_init (fmt, _stm_opts) _injections ~opts =
+let rocqformat_init ((fmt_args : format_config), _stm_opts) _injections ~opts =
   Flags.quiet := true;
   System.trust_file_cache := true;
   Colors.init_color `ON;
-  ignore (fmt, opts);
+  Rocqformat_layout.apply_globals fmt_args.layout;
+  ignore opts;
   _injections
 
 let rocqformat_run ((fmt : format_config), stm_opts) ~opts injections =
