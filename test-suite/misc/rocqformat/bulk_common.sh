@@ -168,10 +168,12 @@ bulk_test_file() {
 
   work_file="$BULK_WORK/$corpus/$rel"
   work_base="${work_file%.v}"
-  work_fmt="${work_base}_fmt.v"
-  work_fmt2="${work_base}_fmt2.v"
+  work_orig="${work_base}.orig.v"
+  work_fmt="${work_base}.fmt.v"
+  work_fmt2="${work_base}.fmt2.v"
   mkdir -p "$(dirname "$work_file")"
   cp "$src" "$work_file"
+  cp "$work_file" "$work_orig"
 
   # shellcheck disable=SC2086
   if ! $COQC $compile_args "$work_file" >/dev/null 2>&1; then
@@ -181,39 +183,40 @@ bulk_test_file() {
   fi
 
   # shellcheck disable=SC2086
-  if ! $ROCQFORMAT $format_args "$work_file" > "$work_fmt" 2>/dev/null; then
-    echo "rocqformat bulk: SKIP $corpus/$rel (formatting failed)"
-    BULK_SKIPPED=$((BULK_SKIPPED + 1))
-    return 0
+  if ! $ROCQFORMAT $format_args "$work_file" > "$work_fmt"; then
+    echo "rocqformat bulk: formatting failed: $corpus/$rel"
+    BULK_FAILED=$((BULK_FAILED + 1))
+    return 1
+  fi
+
+  # Compile formatted output under the original module name (basename).
+  cp "$work_fmt" "$work_file"
+  # shellcheck disable=SC2086
+  if ! $COQC $compile_args "$work_file" >/dev/null 2>&1; then
+    echo "rocqformat bulk: formatted file does not compile: $corpus/$rel"
+    BULK_FAILED=$((BULK_FAILED + 1))
+    return 1
   fi
 
   # shellcheck disable=SC2086
-  if ! $COQC $compile_args "$work_fmt" >/dev/null 2>&1; then
-    echo "rocqformat bulk: SKIP $corpus/$rel (formatted output does not compile)"
-    BULK_SKIPPED=$((BULK_SKIPPED + 1))
-    return 0
-  fi
-
-  # shellcheck disable=SC2086
-  if ! $ROCQFORMAT $format_args "$work_fmt" > "$work_fmt2" 2>/dev/null; then
-    echo "rocqformat bulk: SKIP $corpus/$rel (second format pass failed)"
-    BULK_SKIPPED=$((BULK_SKIPPED + 1))
-    return 0
+  if ! $ROCQFORMAT $format_args "$work_file" > "$work_fmt2"; then
+    echo "rocqformat bulk: second format pass failed: $corpus/$rel"
+    BULK_FAILED=$((BULK_FAILED + 1))
+    return 1
   fi
   bulk_diff "$work_fmt" "$work_fmt2"
   # shellcheck disable=SC2086
-  $ROCQFORMAT $format_args --check "$work_fmt"
+  $ROCQFORMAT $format_args --check "$work_file"
 
-  if ! cmp -s "$work_file" "$work_fmt" >/dev/null 2>&1; then
+  if ! cmp -s "$work_orig" "$work_fmt" >/dev/null 2>&1; then
     BULK_CHANGED=$((BULK_CHANGED + 1))
   else
     BULK_UNCHANGED=$((BULK_UNCHANGED + 1))
   fi
 
-  cp "$work_fmt" "$work_file"
   # shellcheck disable=SC2086
   if ! $COQC $compile_args "$work_file" >/dev/null 2>&1; then
-    echo "rocqformat bulk: formatted file does not compile: $corpus/$rel"
+    echo "rocqformat bulk: formatted file does not compile after idempotency: $corpus/$rel"
     BULK_FAILED=$((BULK_FAILED + 1))
     return 1
   fi

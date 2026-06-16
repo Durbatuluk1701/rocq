@@ -43,7 +43,7 @@ let pr_trailing_comments ~cmd_end trailing =
     | [] -> mt()
     | ((b,_), text) :: rest ->
       let prefix =
-        if first && b <= cmd_end + 2 then spc()
+        if first && b <= cmd_end + 40 then str " "
         else if first then mt()
         else fnl()
       in
@@ -68,7 +68,9 @@ let format_ast ?(layout=default_format_layout) fmt ast comments =
   let trailing_comments = Pputils.extract_trailing_comments (snd loc) in
   let after = pr_trailing_comments ~cmd_end:(snd loc) trailing_comments in
   let trailing =
-    if layout.extra_blank_line then fnl() ++ fnl() else fnl()
+    if layout.extra_blank_line then
+      if Pp.ismt after then fnl() ++ fnl() else fnl()
+    else fnl()
   in
   let doc = format_box layout.box_level (before ++ com ++ after) ++ trailing in
   Pp.pp_with fmt doc
@@ -158,7 +160,11 @@ let load_vernac_core ~beautify ~check ~state ?source file =
     | None ->
       let () = beautify |> Option.iter @@ fun beautify ->
         (* print end of file comments if any *)
-        Pp.pp_with beautify (comment (List.map snd @@ Procq.Parsable.comments in_pa))
+        let comments =
+          List.sort (fun ((b1,_),_) ((b2,_),_) -> Int.compare b1 b2)
+            (Procq.Parsable.comments in_pa)
+        in
+        Pp.pp_with beautify (comment (List.map snd comments))
       in
       input_cleanup ();
       state

@@ -760,7 +760,7 @@ let pr_extend s cl =
       | Egramml.GramTerminal s :: rl, cl -> str s :: aux rl cl
       | [], [] -> []
       | _ -> assert false in
-    hov 1 (pr_sequence identity (aux rl cl))
+    hov 0 (pr_sequence identity (aux rl cl))
   with Not_found ->
     hov 1 (str "TODO(" ++ str s.ext_entry ++ spc () ++ prlist_with_sep sep pr_arg cl ++ str ")")
 
@@ -1018,12 +1018,12 @@ let pr_synpure_vernac_expr v =
   | VernacUniverse v ->
     return (
       hov 2 (keyword "Universe" ++ spc () ++
-             prlist_with_sep (fun _ -> str",") pr_lident v)
+             prlist_with_sep spc pr_lident v)
     )
   | VernacSort v ->
     return (
       hov 2 (keyword "Sort" ++ spc () ++
-             prlist_with_sep (fun _ -> str",") pr_lident v)
+             prlist_with_sep spc pr_lident v)
     )
   | VernacConstraint v ->
     return (

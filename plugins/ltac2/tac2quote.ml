@@ -476,6 +476,33 @@ let of_strategy_flag {loc;v=flag} =
     std_proj "rConst", of_list ?loc of_reference flag.rConst;
   ])
 
+let pr_red_flag {CAst.v=f} =
+  let open Pp in
+  let pr_ref = function
+    | QExpr {CAst.v=QReference qid} -> Libnames.pr_qualid qid
+    | QExpr {CAst.v=QHypothesis id} -> str "&" ++ Id.print id
+    | QAnti {CAst.v=id} -> str "$" ++ Id.print id
+    | _ -> str "_"
+  in
+  match f with
+  | QBeta -> str "beta"
+  | QIota -> str "iota"
+  | QMatch -> str "match"
+  | QFix -> str "fix"
+  | QCofix -> str "cofix"
+  | QZeta -> str "zeta"
+  | QHead -> str "head"
+  | QConst ids ->
+    hov 1 (str "delta" ++ spc() ++ str "[" ++
+           prlist_with_sep spc pr_ref ids.CAst.v ++ str "]")
+  | QDeltaBut ids ->
+    hov 1 (str "delta" ++ spc() ++ str "-" ++ spc() ++ str "[" ++
+           prlist_with_sep spc pr_ref ids.CAst.v ++ str "]")
+
+let pr_strategy_flag {CAst.v=flags} =
+  let open Pp in
+  prlist_with_sep spc pr_red_flag flags
+
 let of_hintdb {loc;v=hdb} = match hdb with
 | QHintAll -> of_option ?loc (fun l -> of_list (fun id -> of_anti of_ident id) l) None
 | QHintDbs ids -> of_option ?loc (fun l -> of_list (fun id -> of_anti of_ident id) l) (Some ids)

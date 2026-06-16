@@ -41,6 +41,8 @@ val pr_partial_pat : PartialPat.t -> Pp.t
 
 val pr_rawexpr_gen : exp_level -> avoid:Id.Set.t -> raw_tacexpr -> Pp.t
 
+val register_tacsyn_printer : (tacsyn -> Pp.t) -> unit
+
 val pr_syntax_class : sexpr -> Pp.t
 
 (** Print main commands, without the "Ltac2" prefix *)

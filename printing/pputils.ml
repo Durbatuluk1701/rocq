@@ -26,7 +26,7 @@ let extract_comments pos =
 let extract_trailing_comments pos =
   (* Comments starting at or after [pos], typically tail or following-line
      comments for the current vernacular command. *)
-  let is_trailing ((b,_),_) = b >= pos in
+  let is_trailing ((b,_),s) = b >= pos && not (String.is_prefix "(**" s) in
   let trailing, rest = List.partition is_trailing !beautify_comments in
   beautify_comments := rest;
   List.rev trailing

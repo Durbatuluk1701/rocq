@@ -423,7 +423,7 @@ let pr_glbexpr_gen lvl ~avoid c =
     let sigma = Evd.from_env env in
     hov 0 (tpe.ml_print env sigma arg)
   | GTacPrm prm ->
-    hov 0 (str "@external" ++ spc () ++ qstring prm.mltac_plugin ++ spc () ++
+    hov 0 (str "@" ++ spc () ++ str "external" ++ spc () ++ qstring prm.mltac_plugin ++ spc () ++
       qstring prm.mltac_tactic)
   and pr_applied_constructor lvl avoid tpe n cl =
     let factorized =
@@ -583,6 +583,30 @@ let rec pr_rawpat_gen lvl p = match p.CAst.v with
 (* XXX in principle we could have collisions with user names *)
 let base_internal_ty_ident = Id.of_string "__α"
 
+let pr_tacsyn_hook = ref (fun (_ : tacsyn) -> Pp.str "<notation>")
+
+let register_tacsyn_printer f = pr_tacsyn_hook := f
+
+let pr_type_param id = str "'" ++ Id.print id.CAst.v
+
+let rec unpack_def_body e =
+  match e.CAst.v with
+  | CTacFun (args, e) ->
+    let args2, inner, ty = unpack_def_body e in
+    (args @ args2, inner, ty)
+  | CTacCnv (e, ty) ->
+    let args, inner, _ = unpack_def_body e in
+    (args, inner, Some ty)
+  | _ -> ([], e, None)
+
+let pr_def_params args =
+  prlist (fun p -> spc () ++ pr_rawpat_gen E0 p) args
+
+let pr_opt_type ty =
+  match ty with
+  | None -> mt ()
+  | Some ty -> spc () ++ str ":" ++ spc () ++ pr_rawtype_gen T5_l ty
+
 let pr_rawexpr_gen lvl ~avoid c =
   let rec pr_rawexpr lvl avoid c =
   let loc = c.CAst.loc in
@@ -643,8 +667,8 @@ let pr_rawexpr_gen lvl ~avoid c =
       | E0 -> paren
       | E1 | E2 | E3 | E4 | E5 -> fun x -> x
     in
-    paren (hov 0 (pr_rawexpr E0 avoid hd ++ spc() ++ pr_sequence (pr_rawexpr E0 avoid) args))
-  | CTacSyn _ -> fmt "<notation>" (* TODO *)
+    paren (hov 0 (pr_rawexpr E0 avoid hd ++ str " " ++ pr_sequence (pr_rawexpr E0 avoid) args))
+  | CTacSyn syn -> !pr_tacsyn_hook syn
   | CTacLet (isrec, bnd, e) ->
     let paren = match lvl with
       | E0 | E1 | E2 | E3 | E4 -> paren
@@ -694,7 +718,11 @@ let pr_rawexpr_gen lvl ~avoid c =
     in
     hov 2 (str "{" ++ spc() ++ def ++ prlist_with_sep pr_semicolon pr_field fields ++ str "}")
   | CTacPrj (e,p) ->
-    hov 0 (pr_rawexpr E0 avoid e ++ str "." ++ paren (pr_relid pr_projection p))
+    let paren_lvl = match lvl with
+      | E0 | E1 -> paren
+      | _ -> fun x -> x
+    in
+    paren_lvl (hov 0 (pr_rawexpr E0 avoid e ++ str "." ++ paren (pr_relid pr_projection p)))
   | CTacSet (e1,p,e2) ->
     hov 0 (pr_rawexpr E0 avoid e1 ++ str "." ++ paren (pr_relid pr_projection p)
            ++ spc() ++ str ":=" ++ spc() ++ pr_rawexpr E1 avoid e2)
@@ -741,15 +769,20 @@ let pr_one_strval ~isrec (na, e) =
     | Anonymous -> Id.Set.empty
     | Name id -> if isrec then Id.Set.singleton id else Id.Set.empty
   in
-  pr_lname na ++ str " :=" ++ spc() ++ pr_rawexpr_gen E5 ~avoid e
+  match e.CAst.v with
+  | CTacCnv (body, ty) ->
+    pr_lname na ++ pr_opt_type (Some ty) ++ str " :=" ++ spc ()
+    ++ pr_rawexpr_gen E5 ~avoid body
+  | _ ->
+    pr_lname na ++ str " :=" ++ spc() ++ pr_rawexpr_gen E5 ~avoid e
 
 (* XXX boxing can probably be improved, current output is not great
    (try -beautify on Ltac2.Std to see) *)
 let pr_one_strtyp (qid, redef, (params, v)) =
   let ppparams = match params with
     | [] -> mt()
-    | [x] -> pr_lident x ++ spc()
-    | _ -> surround (prlist_with_sep pr_comma pr_lident params) ++ spc()
+    | [x] -> pr_type_param x ++ spc()
+    | _ -> surround (prlist_with_sep pr_comma pr_type_param params) ++ spc()
   in
   let ppredef = if redef then str " ::=" ++ spc() else str " :=" ++ spc() in
   let ppv = match v with
@@ -768,10 +801,10 @@ let pr_one_strtyp (qid, redef, (params, v)) =
       let ppctors = match ctors with
         | [] -> str "[ ]"
         | [c] -> str "[" ++ spc() ++ pr_one_ctor c ++ spc() ++ str "]"
-        | _ ->
+        | c :: rest ->
           hv 0
-            (str "[" ++ spc() ++
-             prlist_with_sep spc (fun c -> str "| " ++ pr_one_ctor c) ctors ++
+            (str "[" ++ spc() ++ pr_one_ctor c ++
+             prlist (fun c -> spc() ++ str "| " ++ pr_one_ctor c) rest ++
              spc() ++ str "]")
       in
       ppredef ++ ppctors
@@ -796,7 +829,7 @@ let pr_strexpr = function
     str "Type " ++ pr_isrec isrec ++
     hv 0 (prlist_with_sep (fun () -> spc() ++ str "with ") pr_one_strtyp typs)
   | StrPrm (id, typ, v) ->
-    str "@external " ++ pr_lident id ++ spc() ++ str ": " ++ hov 0 (pr_rawtype_gen T5_r typ)
+    str "@" ++ spc () ++ str "external " ++ pr_lident id ++ spc() ++ str ": " ++ hov 0 (pr_rawtype_gen T5_r typ)
     ++ spc() ++ hov 2 (str ":= " ++ qstring v.mltac_plugin ++ spc() ++ qstring v.mltac_tactic)
   | StrMut (qid, asna, e) ->
     let avoid = match asna with
