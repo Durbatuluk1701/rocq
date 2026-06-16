@@ -50,13 +50,26 @@ VO_ROOT=$(bulk_find_vo_root) || {
   exit 0
 }
 
+COQLIB=$(bulk_find_coqlib) || {
+  echo "SKIP rocqformat bulk (coqlib not found; install with: dune build -p rocq-runtime,rocq-core,rocqformat)"
+  exit 0
+}
+
+RUNTIME_LIB=$(bulk_find_runtime_lib) || {
+  echo "SKIP rocqformat bulk (rocq-runtime not found; build with: dune build -p rocq-runtime)"
+  exit 0
+}
+export ROCQRUNTIMELIB="$RUNTIME_LIB"
+
 rm -rf "$BULK_WORK"
 mkdir -p "$BULK_WORK"
 
-FORMAT_CORELIB=$(bulk_corelib_format_args)
-COMPILE_CORELIB=$(bulk_corelib_compile_args "$VO_ROOT")
+FORMAT_CORELIB=$(bulk_corelib_format_args "$COQLIB")
+COMPILE_CORELIB=$(bulk_corelib_compile_args "$COQLIB" "$VO_ROOT")
 
 echo "rocqformat bulk: using vo root $VO_ROOT"
+echo "rocqformat bulk: using coqlib $COQLIB"
+echo "rocqformat bulk: using runtime $RUNTIME_LIB"
 
 bulk_run_corpus corelib "$REPO_ROOT/theories/Corelib" Corelib \
   "$FORMAT_CORELIB" "$COMPILE_CORELIB"
@@ -82,8 +95,8 @@ if [ -n "$STDLIB_ROOT" ] && [ -d "$STDLIB_ROOT/theories" ]; then
     echo "rocqformat bulk: build with: (cd $STDLIB_ROOT && dune build -p rocq-stdlib)"
     echo "SKIP stdlib corpus"
   else
-    FORMAT_STDLIB=$(bulk_stdlib_format_args "$STDLIB_SRC")
-    COMPILE_STDLIB=$(bulk_stdlib_compile_args "$VO_ROOT" "$STDLIB_VO")
+    FORMAT_STDLIB=$(bulk_stdlib_format_args "$COQLIB" "$STDLIB_SRC")
+    COMPILE_STDLIB=$(bulk_stdlib_compile_args "$COQLIB" "$VO_ROOT" "$STDLIB_VO")
     bulk_run_corpus stdlib "$STDLIB_SRC" Stdlib \
       "$FORMAT_STDLIB" "$COMPILE_STDLIB"
   fi
