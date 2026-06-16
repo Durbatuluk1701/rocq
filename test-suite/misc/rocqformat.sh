@@ -179,7 +179,7 @@ run_case() {
   diff "$case_dir/expected.v" "$workdir/idempotent.out"
 
   # --check must reject input that still needs formatting.
-  if ! diff -q "$case_dir/input.v" "$case_dir/expected.v" >/dev/null 2>&1; then
+  if ! command diff -q "$case_dir/input.v" "$case_dir/expected.v" >/dev/null 2>&1; then
     cp "$case_dir/input.v" "$workdir/check.v"
     # shellcheck disable=SC2086
     if $ROCQFORMAT $format_args $extra_args --check "$workdir/check.v" \

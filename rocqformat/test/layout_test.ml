@@ -22,7 +22,7 @@ let test_normalize_blank_lines _ =
   assert_equal "a\n\nb\n" (normalize_output "a\n\n\nb")
 
 let test_normalize_empty _ =
-  assert_equal "\n" (normalize_output "")
+  assert_equal "" (normalize_output "")
 
 let suite =
   "rocqformat_layout" >:::

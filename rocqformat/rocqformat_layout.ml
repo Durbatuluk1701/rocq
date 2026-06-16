@@ -76,6 +76,7 @@ let normalize_output s =
   in
   loop 0 0;
   let content = Buffer.contents buf in
-  if content = "" || content.[String.length content - 1] <> '\n'
+  if content = "" then content
+  else if content.[String.length content - 1] <> '\n'
   then content ^ "\n"
   else content
