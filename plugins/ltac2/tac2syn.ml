@@ -818,7 +818,6 @@ let is_red_flags_field = function
   | proj, _ ->
     let id = Names.Id.to_string (projection_id proj) in
     String.equal id "rBeta" || String.equal id "rStrength"
-  | _ -> false
 
 let is_true_expr = function
   | {CAst.v=CTacCst (AbsKn (Other kn))} ->

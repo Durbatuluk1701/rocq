@@ -482,7 +482,6 @@ let pr_red_flag {CAst.v=f} =
     | QExpr {CAst.v=QReference qid} -> Libnames.pr_qualid qid
     | QExpr {CAst.v=QHypothesis id} -> str "&" ++ Id.print id
     | QAnti {CAst.v=id} -> str "$" ++ Id.print id
-    | _ -> str "_"
   in
   match f with
   | QBeta -> str "beta"

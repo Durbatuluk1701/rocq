@@ -105,7 +105,7 @@ let compile_file opts stm_opts copts injections f_in =
 let compile_file opts stm_opts copts injections =
   Option.iter (compile_file opts stm_opts copts injections) copts.compile_file
 
-let format_file opts stm_options injections ?layout ~output ~f_in =
+let format_file opts stm_options injections ~output ~f_in ~layout =
   let open Vernac.State in
   let long_f_dot_in, long_f_dot_out =
     ensure_exists_with_prefix ~src:f_in ~tgt:None ~src_ext:".v" ~tgt_ext:".vo" in
@@ -119,4 +119,4 @@ let format_file opts stm_options injections ?layout ~output ~f_in =
   let state = Load.load_init_vernaculars opts ~state in
   let ldir = Stm.get_ldir ~doc:state.doc in
   let source = source ldir long_f_dot_in in
-  ignore (Vernac.format_file ?layout ~output ~check:true ~state ~source long_f_dot_in)
+  ignore (Vernac.format_file ~layout ~output ~check:true ~state ~source long_f_dot_in)

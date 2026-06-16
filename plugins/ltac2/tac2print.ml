@@ -589,19 +589,6 @@ let register_tacsyn_printer f = pr_tacsyn_hook := f
 
 let pr_type_param id = str "'" ++ Id.print id.CAst.v
 
-let rec unpack_def_body e =
-  match e.CAst.v with
-  | CTacFun (args, e) ->
-    let args2, inner, ty = unpack_def_body e in
-    (args @ args2, inner, ty)
-  | CTacCnv (e, ty) ->
-    let args, inner, _ = unpack_def_body e in
-    (args, inner, Some ty)
-  | _ -> ([], e, None)
-
-let pr_def_params args =
-  prlist (fun p -> spc () ++ pr_rawpat_gen E0 p) args
-
 let pr_opt_type ty =
   match ty with
   | None -> mt ()
