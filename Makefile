@@ -161,7 +161,7 @@ states: world
 	echo "'make states' is an alias for 'make world'"
 
 MAIN_TARGETS:=rocq-runtime.install coq-core.install rocq-core.install \
-  coqide-server.install rocq-devtools.install
+  coqide-server.install rocq-devtools.install rocqformat.install
 
 world: dunestrap
 	+$(WITHJOBS) dune build $(DUNEOPT) $(MAIN_TARGETS)

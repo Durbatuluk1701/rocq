@@ -5,32 +5,16 @@ set -ex
 export COQBIN=${BIN:-}
 export PATH="${BIN:+$BIN:}$PATH"
 
-if [ -n "${ROCQFORMAT:-}" ] && [ -x "${ROCQFORMAT}" ]; then
-  :
-elif command -v rocqformat >/dev/null 2>&1; then
-  ROCQFORMAT=rocqformat
-elif [ -n "${BIN:-}" ] && [ -x "${BIN}/rocqformat" ]; then
-  ROCQFORMAT="${BIN}/rocqformat"
-elif [ -x "_build/default/rocqformat/main.exe" ]; then
-  ROCQFORMAT="_build/default/rocqformat/main.exe"
-elif [ -x "../_build/default/rocqformat/main.exe" ]; then
-  ROCQFORMAT="../_build/default/rocqformat/main.exe"
-else
-  echo "rocqformat not found"
+SCRIPT_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
+REPO_ROOT=$(CDPATH= cd "$SCRIPT_DIR/../.." && pwd)
+# shellcheck source=misc/rocqformat/bulk_common.sh
+. "$SCRIPT_DIR/rocqformat/bulk_common.sh"
+
+if ! bulk_resolve_tools; then
   exit 1
 fi
-
-if [ -n "${BIN:-}" ] && [ -x "${BIN}/rocq" ]; then
-  COQC="${BIN}rocq c"
-elif command -v rocq >/dev/null 2>&1; then
-  COQC="rocq c"
-elif [ -x "_build/install/default/bin/rocq" ]; then
-  COQC="_build/install/default/bin/rocq c"
-elif [ -x "../_build/install/default/bin/rocq" ]; then
-  COQC="../_build/install/default/bin/rocq c"
-else
-  COQC=""
-fi
+export BIN=${BIN:-$BULK_BIN_DIR/}
+export PATH="${BIN:+$BIN:}$PATH"
 
 diff() {
   command diff -a -u --strip-trailing-cr "$1" "$2"
