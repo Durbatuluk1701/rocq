@@ -26,12 +26,6 @@ let read_file path =
   close_in ic;
   Bytes.to_string buf
 
-let make_formatter layout chan =
-  let out s b e = output_substring chan s b e in
-  let fmt = Format.make_formatter out (fun () -> flush chan) in
-  Rocqformat_layout.configure_formatter layout fmt;
-  fmt
-
 let formatter_to_string layout f =
   let buf = Buffer.create 1024 in
   let out s b e = Buffer.add_substring buf s b e in
@@ -46,13 +40,6 @@ let format_to_string layout opts stm_opts injections file =
   formatter_to_string layout (fun fmt ->
       Ccompile.format_file opts stm_opts injections ~layout:vernac_layout
         ~output:fmt ~f_in:file)
-
-let format_to_channel layout opts stm_opts injections file ch =
-  let fmt = make_formatter layout ch in
-  let vernac_layout = Rocqformat_layout.to_vernac_layout layout in
-  Ccompile.format_file opts stm_opts injections ~layout:vernac_layout
-    ~output:fmt ~f_in:file;
-  Format.pp_print_flush fmt ()
 
 let format_to_file layout opts stm_opts injections file output =
   let content = format_to_string layout opts stm_opts injections file in
