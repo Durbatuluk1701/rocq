@@ -45,6 +45,10 @@ rocqformat specific options:\
 \n  --signature-break-indent=n  indent for wrapped type signatures (default 4)\
 \n  --body-break-indent=n       indent for definition bodies (default 2)\
 \n  --if-style=auto|inline|multiline  if/then/else layout (default auto)\
+\n  --header-style=preserve|compact  blank lines after copyright blocks (default preserve)\
+\n  --notation-style=inline|auto  Reserved/Notation modifier layout (default inline)\
+\n  --inductive-style=auto|compact|verbose  inductive constructor layout (default auto)\
+\n  --project=FILE            read -R/-Q paths from a RocqProject/_CoqProject file\
 \n\
 \nrocqformat uses Rocq's parser and pretty-printer. Pass standard Rocq\
 \noptions (-R, -Q, -boot, -noinit, ...) before the file names.\
@@ -74,6 +78,49 @@ let parse_if_style = function
     Printf.eprintf "Invalid --if-style: %s (expected auto, inline, or multiline)\n%!" s;
     exit 1
 
+let parse_header_style = function
+  | "preserve" -> Rocqformat_layout.HeaderPreserve
+  | "compact" -> Rocqformat_layout.HeaderCompact
+  | s ->
+    Printf.eprintf "Invalid --header-style: %s (expected preserve or compact)\n%!" s;
+    exit 1
+
+let parse_notation_style = function
+  | "auto" -> Rocqformat_layout.NotationAuto
+  | "inline" -> Rocqformat_layout.NotationInline
+  | s ->
+    Printf.eprintf "Invalid --notation-style: %s (expected auto or inline)\n%!" s;
+    exit 1
+
+let parse_inductive_style = function
+  | "auto" -> Rocqformat_layout.InductiveAuto
+  | "compact" -> Rocqformat_layout.InductiveCompact
+  | "verbose" -> Rocqformat_layout.InductiveVerbose
+  | s ->
+    Printf.eprintf "Invalid --inductive-style: %s (expected auto, compact, or verbose)\n%!" s;
+    exit 1
+
+let expand_project_args extras project_file =
+  let warning_fn msg = Printf.eprintf "Warning: %s\n%!" msg in
+  try
+    let project = CoqProject_file.read_project_file ~warning_fn project_file in
+    CoqProject_file.coqtop_args_from_project project @ extras
+  with
+  | CoqProject_file.Parsing_error msg ->
+    Printf.eprintf "rocqformat: invalid project file %s: %s\n%!" project_file msg;
+    exit 1
+  | CoqProject_file.UnableToOpenProjectFile msg ->
+    Printf.eprintf "rocqformat: cannot open project file %s: %s\n%!" project_file msg;
+    exit 1
+
+let finalize_parsing acc extras =
+  let extras =
+    match acc.layout.project_file with
+    | None -> extras
+    | Some file -> expand_project_args extras file
+  in
+  acc, extras
+
 let rec parse acc = function
   | "-help" :: _ | "--help" :: _ ->
       Boot.Usage.print_usage stderr usage;
@@ -92,6 +139,18 @@ let rec parse acc = function
   | arg :: rest when String.length arg > 11 && String.sub arg 0 11 = "--if-style=" ->
       let style = parse_if_style (String.sub arg 11 (String.length arg - 11)) in
       parse (update_layout acc (fun l -> { l with if_layout = style })) rest
+  | arg :: rest when String.length arg > 15 && String.sub arg 0 15 = "--header-style=" ->
+      let style = parse_header_style (String.sub arg 15 (String.length arg - 15)) in
+      parse (update_layout acc (fun l -> { l with header_style = style })) rest
+  | arg :: rest when String.length arg > 17 && String.sub arg 0 17 = "--notation-style=" ->
+      let style = parse_notation_style (String.sub arg 17 (String.length arg - 17)) in
+      parse (update_layout acc (fun l -> { l with notation_style = style })) rest
+  | arg :: rest when String.length arg > 18 && String.sub arg 0 18 = "--inductive-style=" ->
+      let style = parse_inductive_style (String.sub arg 18 (String.length arg - 18)) in
+      parse (update_layout acc (fun l -> { l with inductive_style = style })) rest
+  | arg :: rest when String.length arg > 10 && String.sub arg 0 10 = "--project=" ->
+      let file = String.sub arg 10 (String.length arg - 10) in
+      parse (update_layout acc (fun l -> { l with project_file = Some file })) rest
   | arg :: rest ->
       begin match
         parse_prefixed_int ~opt:"margin" arg "--margin=",
@@ -130,9 +189,11 @@ let rec parse acc = function
             exit 1)
           else parse { acc with files = acc.files @ [arg] } rest
       end
-  | rest -> acc, rest
+  | rest -> finalize_parsing acc rest
 
-let parse extras = parse default extras
+let parse extras =
+  let acc, rest = parse default extras in
+  acc, rest
 
 let validate t =
   if t.files = [] then (

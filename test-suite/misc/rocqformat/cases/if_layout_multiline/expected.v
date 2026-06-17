@@ -1,6 +1,5 @@
 Inductive bool : Set :=
-  | true : _
-  | false : _.
+  | true | false.
 
 Inductive nat : Set :=
   | O : _

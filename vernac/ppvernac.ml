@@ -531,8 +531,12 @@ let pr_syntax_modifier = let open Gramlib.Gramext in CAst.with_val (function
 
 let pr_syntax_modifiers = function
   | [] -> mt()
-  | l -> spc() ++
-         hov 1 (str"(" ++ prlist_with_sep sep_v2 pr_syntax_modifier l ++ str")")
+  | l ->
+    let inner = str"(" ++ prlist_with_sep sep_v2 pr_syntax_modifier l ++ str")" in
+    let policy = !Format_policy.active in
+    match policy.notation_style with
+    | Format_policy.NotationInline -> spc() ++ hv 0 inner
+    | Format_policy.NotationAuto -> spc() ++ hov 1 inner
 
 let pr_notation_declaration ntn_decl =
   let open Vernacexpr in
@@ -751,6 +755,19 @@ let pr_using e =
     | SsFwdClose e -> "("^aux e^")*"
   in Pp.str (aux e)
 
+let is_simple_inductive_constructor (_, (_, c)) =
+  match c.CAst.v with
+  | Constrexpr.CHole _ -> true
+  | _ -> false
+
+let use_compact_inductive_layout constructors =
+  let policy = !Format_policy.active in
+  match policy.inductive_style with
+  | Format_policy.InductiveCompact -> true
+  | Format_policy.InductiveVerbose -> false
+  | Format_policy.InductiveAuto ->
+    List.for_all is_simple_inductive_constructor constructors
+
 let pr_extend s cl =
   let pr_arg a =
     try pr_gen a
@@ -763,7 +780,11 @@ let pr_extend s cl =
       | Egramml.GramTerminal s :: rl, cl -> str s :: aux rl cl
       | [], [] -> []
       | _ -> assert false in
-    hov 0 (pr_sequence identity (aux rl cl))
+    let doc = pr_sequence identity (aux rl cl) in
+    if String.equal s.ext_entry "VernacDeclareTacticDefinition" then
+      hv 0 doc
+    else
+      hov 0 doc
   with Not_found ->
     hov 1 (str "TODO(" ++ str s.ext_entry ++ spc () ++ prlist_with_sep sep pr_arg cl ++ str ")")
 
@@ -957,13 +978,23 @@ let pr_synpure_vernac_expr v =
       hov 2 (pr_vernac_attributes attr ++ pr_lident id ++ pr_oc coe ins ++
              pr_spc_lconstr c)
     in
+    let pr_compact_constructor ((attr,coe,ins),(id,c) as ctor) =
+      pr_vernac_attributes attr ++ pr_lident id
+      ++ (if is_simple_inductive_constructor ctor then mt ()
+          else pr_oc coe ins ++ pr_spc_lconstr c)
+    in
     let pr_constructor_list l = match l with
       | Constructors [] -> mt()
-      | Constructors l ->
-        let fst_sep = match l with [_] -> "   " | _ -> " | " in
-        pr_com_at (begin_of_inductive l) ++
-        fnl() ++ str fst_sep ++
-        prlist_with_sep (fun _ -> fnl() ++ str" | ") pr_constructor l
+      | Constructors constructors ->
+        if use_compact_inductive_layout constructors then
+          fnl() ++ str " | "
+          ++ prlist_with_sep (fun _ -> spc () ++ str "|" ++ spc ())
+               pr_compact_constructor constructors
+        else
+          let fst_sep = match constructors with [_] -> "   " | _ -> " | " in
+          pr_com_at (begin_of_inductive constructors) ++
+          fnl() ++ str fst_sep ++
+          prlist_with_sep (fun _ -> fnl() ++ str" | ") pr_constructor constructors
       | RecordDecl (c,fs,obinder) ->
         pr_record_decl c fs obinder
     in
@@ -1397,10 +1428,15 @@ let pr_synterp_vernac_expr v =
       pr_notation_declaration ntn_decl))
     )
   | VernacReservedNotation (_, (s, l)) ->
-    return (
+    let policy = !Format_policy.active in
+    let doc =
       keyword "Reserved Notation" ++ spc() ++ pr_ast qs s ++
       pr_syntax_modifiers l
-    )
+    in
+    return (
+      match policy.notation_style with
+      | Format_policy.NotationInline -> hv 0 doc
+      | Format_policy.NotationAuto -> hov 0 doc)
   | VernacDeclareCustomEntry s ->
     return (
       keyword "Declare Custom Entry " ++ Id.print s

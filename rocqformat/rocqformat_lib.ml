@@ -33,7 +33,7 @@ let formatter_to_string layout f =
   Rocqformat_layout.configure_formatter layout fmt;
   f fmt;
   Format.pp_print_flush fmt ();
-  Rocqformat_layout.normalize_output (Buffer.contents buf)
+  Rocqformat_layout.normalize_output ~layout (Buffer.contents buf)
 
 let format_to_string layout opts stm_opts injections file =
   Rocqformat_layout.apply_globals layout;

@@ -6,6 +6,19 @@ type if_layout =
   | IfInline
   | IfMultiline
 
+type header_style =
+  | HeaderPreserve
+  | HeaderCompact
+
+type notation_style =
+  | NotationAuto
+  | NotationInline
+
+type inductive_style =
+  | InductiveAuto
+  | InductiveCompact
+  | InductiveVerbose
+
 type t = {
   block_indent : int;
   proof_indent : int;
@@ -14,6 +27,9 @@ type t = {
   signature_break_indent : int;
   body_break_indent : int;
   if_layout : if_layout;
+  header_style : header_style;
+  notation_style : notation_style;
+  inductive_style : inductive_style;
 }
 
 val default : t

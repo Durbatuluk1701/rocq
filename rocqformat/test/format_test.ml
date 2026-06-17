@@ -4,9 +4,23 @@
 open OUnit2
 
 let find_rocqformat () =
-  Filename.quote Rocqformat_test_config.rocqformat_path
+  let candidates = [
+    Rocqformat_test_config.rocqformat_path;
+    "_build/default/rocqformat/main.exe";
+    Filename.concat (Filename.dirname Sys.executable_name) "../main.exe";
+  ] in
+  let path =
+    try List.find Sys.file_exists candidates
+    with Not_found -> Rocqformat_test_config.rocqformat_path
+  in
+  Filename.quote path
 
-let cases_root = Rocqformat_test_config.cases_root
+let cases_root =
+  let root = Rocqformat_test_config.cases_root in
+  if Sys.file_exists root then root
+  else
+    let alt = "test-suite/misc/rocqformat/cases" in
+    if Sys.file_exists alt then alt else root
 
 let read_file path =
   let ic = open_in_bin path in
