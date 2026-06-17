@@ -561,8 +561,8 @@ let pr_statement head (idpl,(bl,c)) =
   let sig_ind = policy.signature_break_indent in
   let body_ind = policy.body_break_indent in
   hov 2
-    (head ++ spc() ++ pr_ident_decl idpl ++ spc() ++
-     (match bl with [] -> mt() | _ -> pr_binders bl ++ spc()) ++
+    (head ++ spc() ++ pr_ident_decl idpl ++
+     (match bl with [] -> mt() | _ -> spc() ++ pr_binders bl) ++
      brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_spc_lconstr c)
 
 let pr_rew_rule (ubinders, lhs, rhs) =
@@ -767,10 +767,10 @@ let pr_extend s cl =
   with Not_found ->
     hov 1 (str "TODO(" ++ str s.ext_entry ++ spc () ++ prlist_with_sep sep pr_arg cl ++ str ")")
 
-let pr_def_assign_break body_ind body doc =
+let pr_def_assign_break _body_ind body doc =
   match body.CAst.v with
   | Constrexpr.CIf _ -> fnl () ++ doc
-  | _ -> brk(1, body_ind) ++ doc
+  | _ -> spc () ++ doc
 
 let pr_synpure_vernac_expr v =
   let return = tag_vernac v in

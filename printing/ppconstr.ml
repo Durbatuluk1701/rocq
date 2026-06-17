@@ -775,7 +775,15 @@ let pr ~flags pr sep lev_after inherited a =
             ++ keyword "then" ++ spc () ++ pr mt no_after ltop b1 ++ spc ()
             ++ keyword "else" ++ spc () ++ pr mt lev_after ltop b2)
         in
-        let if_auto () = if_inline () in
+        let if_auto () =
+          hv 0 (
+            hov 1 (keyword "if" ++ spc () ++ pr mt no_after ltop c
+                   ++ pr_simple_return_type (pr mt) na po) ++
+            spc () ++
+            hov 0 (keyword "then"
+                   ++ pr (fun () -> brk (1, 1)) no_after ltop b1) ++ spc () ++
+            hov 0 (keyword "else" ++ pr (fun () -> brk (1, 1)) lev_after ltop b2))
+        in
         match policy.if_layout with
         | Format_policy.IfInline -> if_inline ()
         | Format_policy.IfMultiline -> if_multiline ()
