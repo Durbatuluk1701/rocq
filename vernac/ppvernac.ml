@@ -767,6 +767,11 @@ let pr_extend s cl =
   with Not_found ->
     hov 1 (str "TODO(" ++ str s.ext_entry ++ spc () ++ prlist_with_sep sep pr_arg cl ++ str ")")
 
+let pr_def_assign_break body_ind body doc =
+  match body.CAst.v with
+  | Constrexpr.CIf _ -> fnl () ++ doc
+  | _ -> brk(1, body_ind) ++ doc
+
 let pr_synpure_vernac_expr v =
   let return = tag_vernac v in
   match v with
@@ -895,7 +900,9 @@ let pr_synpure_vernac_expr v =
           | Some ty ->
             brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_spc_lconstr ty
         in
-        pr_binders_arg bl ++ ty ++ brk(0, body_ind) ++ str " :=" ++ spc() ++ pr_reduce red ++ pr_lconstr body
+        let body_doc = pr_reduce red ++ pr_lconstr body in
+        pr_binders_arg bl ++ ty ++ brk(0, body_ind) ++ str " :="
+        ++ pr_def_assign_break body_ind body body_doc
       | ProveBody (bl,t) ->
         let policy = !Format_policy.active in
         let sig_ind = policy.signature_break_indent in

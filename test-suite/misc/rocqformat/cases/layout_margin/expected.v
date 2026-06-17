@@ -5,4 +5,4 @@ Set :=
 
 Definition x :
   very_long_name_for_testing_wrapping :=
-  ctor_with_long_name.
+    ctor_with_long_name.
