@@ -24,6 +24,15 @@ type module_style =
   | ModuleCompact
   | ModuleSpaced
 
+type comment_style =
+  | CommentAuto
+  | CommentPreserve
+
+type assumption_style =
+  | AssumptionAuto
+  | AssumptionCompact
+  | AssumptionSpaced
+
 type t = {
   block_indent : int;
   proof_indent : int;
@@ -36,6 +45,8 @@ type t = {
   notation_style : notation_style;
   inductive_style : inductive_style;
   module_style : module_style;
+  comment_style : comment_style;
+  assumption_style : assumption_style;
 }
 
 val default : t

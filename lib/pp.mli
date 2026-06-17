@@ -76,6 +76,9 @@ val ismt  : t -> bool
 
 val comment  : string list -> t
 
+(** When [true], multiline comments are printed without [normalize_comment_body]. *)
+val preserve_comment_body : bool ref
+
 val fmt : ('a, unit, t) format -> 'a
 (** complex formatting *)
 

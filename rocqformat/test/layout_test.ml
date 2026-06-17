@@ -54,6 +54,8 @@ let test_default_layout _ =
   assert_equal NotationInline default.notation_style;
   assert_equal InductiveAuto default.inductive_style;
   assert_equal ModuleAuto default.module_style;
+  assert_equal CommentPreserve default.comment_style;
+  assert_equal AssumptionAuto default.assumption_style;
   assert_equal false default.project_auto;
   assert_equal 80 (proof_margin default)
 

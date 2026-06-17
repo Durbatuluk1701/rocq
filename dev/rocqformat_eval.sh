@@ -9,6 +9,7 @@ export ROCQRUNTIMELIB="${ROCQRUNTIMELIB:-$REPO_ROOT/_build/default}"
 
 BOOT_ARGS="-q -boot -noinit -R $REPO_ROOT/theories/Corelib Corelib -Q $REPO_ROOT/theories/Ltac2 Ltac2 --continue-on-error"
 VO_ARGS="-q -boot -noinit -R $REPO_ROOT/_build/default/theories/Corelib Corelib -Q $REPO_ROOT/_build/default/theories/Ltac2 Ltac2 --continue-on-error"
+PROJECT_ARGS="--project-auto --continue-on-error"
 
 mkdir -p "$OUT_DIR"/{diffs,errors}
 
@@ -43,7 +44,7 @@ format_corpus() {
         mode=stdlib-boot
       fi
     fi
-    if ! $ROCQFORMAT $args "$src" >"$OUT_DIR/work_${safe}.fmt" 2>"$OUT_DIR/errors/${safe}.err"; then
+    if ! $ROCQFORMAT $PROJECT_ARGS $args "$src" >"$OUT_DIR/work_${safe}.fmt" 2>"$OUT_DIR/errors/${safe}.err"; then
       echo "$rel" >>"$failed"
       echo -e "$rel\tfailed\t0\t$mode\tformat error" >>"$summary"
       continue
@@ -66,6 +67,17 @@ format_corpus() {
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"/{diffs,errors}
 format_corpus corelib "$REPO_ROOT/theories/Corelib" 0
+
+if [ -f "$REPO_ROOT/theories/Corelib/_CoqProject" ]; then
+  echo "=== corelib-project (format-project) ==="
+  if $ROCQFORMAT -q -boot -noinit --format-project \
+      --project="$REPO_ROOT/theories/Corelib/_CoqProject" \
+      --check 2>"$OUT_DIR/corelib_project_check.err"; then
+    echo "corelib-project: all files formatted"
+  else
+    echo "corelib-project: some files need formatting (see $OUT_DIR/corelib_project_check.err)"
+  fi
+fi
 
 STDLIB_ROOT="${STDLIB_ROOT:-$REPO_ROOT/test-suite/misc/rocqformat/_stdlib/theories}"
 if [ -d "$STDLIB_ROOT" ]; then

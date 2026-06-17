@@ -148,6 +148,8 @@ let qstring s = str (CString.quote_coq_string s)
 let qs = qstring
 let quote s = h (str "\"" ++ s ++ str "\"")
 
+let preserve_comment_body = ref false
+
 let is_blank_line line =
   let blank = ref true in
   for i = 0 to String.length line - 1 do
@@ -188,7 +190,7 @@ let normalize_comment_body s =
         String.concat "\n" (first :: List.map dedent rest)
 
 let pr_com ft s =
-  let s = normalize_comment_body s in
+  let s = if !preserve_comment_body then s else normalize_comment_body s in
   let lines = String.split_on_char '\n' s in
   Format.pp_open_tbox ft ();
   List.iteri (fun i line ->

@@ -392,6 +392,23 @@ let use_compact_module_apply () =
   | Format_policy.ModuleCompact | Format_policy.ModuleAuto -> true
   | Format_policy.ModuleSpaced -> false
 
+let use_compact_assumption_layout () =
+  let policy = !Format_policy.active in
+  match policy.assumption_style with
+  | Format_policy.AssumptionCompact -> true
+  | Format_policy.AssumptionSpaced -> false
+  | Format_policy.AssumptionAuto -> false
+
+let pr_assumption_params (c, (xl, t)) =
+  let after_colon =
+    match c with
+    | AddCoercion -> str ":>" ++ spc () ++ pr_lconstr_expr t
+    | NoCoercion ->
+      if use_compact_assumption_layout () then str ":" ++ pr_lconstr_expr t
+      else str ":" ++ spc () ++ pr_lconstr_expr t
+  in
+  hov 2 (prlist_with_sep sep pr_ident_decl xl ++ spc () ++ after_colon)
+
 let rec pr_module_ast leading_space pr_c = function
   | { loc ; v = CMident qid } ->
     if leading_space then
@@ -983,18 +1000,12 @@ let pr_synpure_vernac_expr v =
     return (hov 2 (keyword "Proof" ++ pr_lconstrarg c))
   | VernacAssumption ((discharge,kind),t,l) ->
     let n = List.length (List.flatten (List.map fst (List.map snd l))) in
-    let pr_params (c, (xl, t)) =
-      hov 2 (prlist_with_sep sep pr_ident_decl xl ++ spc() ++
-             str(match c with AddCoercion -> ":>" | NoCoercion -> ":") ++ spc() ++ pr_lconstr_expr t) in
-    let assumptions = prlist_with_sep spc (fun p -> hov 1 (str "(" ++ pr_params p ++ str ")")) l in
+    let assumptions = prlist_with_sep spc (fun p -> hov 1 (str "(" ++ pr_assumption_params p ++ str ")")) l in
     return (hov 2 (pr_assumption_token (n > 1) discharge kind ++
                    pr_non_empty_arg pr_assumption_inline t ++ spc() ++ assumptions))
   | VernacSymbol l ->
     let n = List.length (List.flatten (List.map fst (List.map snd l))) in
-    let pr_params (c, (xl, t)) =
-      hov 2 (prlist_with_sep sep pr_ident_decl xl ++ spc() ++
-              str(match c with AddCoercion -> ":>" | NoCoercion -> ":") ++ spc() ++ pr_lconstr_expr t) in
-    let assumptions = prlist_with_sep spc (fun p -> hov 1 (str "(" ++ pr_params p ++ str ")")) l in
+    let assumptions = prlist_with_sep spc (fun p -> hov 1 (str "(" ++ pr_assumption_params p ++ str ")")) l in
     return (hov 2 (keyword (if (n > 1) then "Symbols" else "Symbol") ++ spc() ++ assumptions))
   | VernacInductive (f,l) ->
     let pr_constructor ((attr,coe,ins),(id,c)) =

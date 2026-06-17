@@ -14,6 +14,7 @@ type t = {
   output : string option;
   layout : Rocqformat_layout.t;
   files : string list;
+  format_project : bool;
 }
 
 let default = {
@@ -22,6 +23,7 @@ let default = {
   output = None;
   layout = Rocqformat_layout.default;
   files = [];
+  format_project = false;
 }
 
 let usage = Boot.Usage.{
@@ -49,8 +51,11 @@ rocqformat specific options:\
 \n  --notation-style=inline|auto  Reserved/Notation modifier layout (default inline)\
 \n  --inductive-style=auto|compact|verbose  inductive constructor layout (default auto)\
 \n  --module-style=auto|compact|spaced  module/functor binder layout (default auto)\
+\n  --comment-style=auto|preserve  multiline doc comment layout (default preserve)\
+\n  --assumption-style=auto|compact|spaced  Parameter/Axiom type spacing (default auto)\
 \n  --project=FILE            read -R/-Q paths from a RocqProject/_CoqProject file\
 \n  --project-auto            search for _CoqProject near input files\
+\n  --format-project          format all .v files listed in the project file\
 \n\
 \nrocqformat uses Rocq's parser and pretty-printer. Pass standard Rocq\
 \noptions (-R, -Q, -boot, -noinit, ...) before the file names.\
@@ -110,16 +115,25 @@ let parse_module_style = function
     Printf.eprintf "Invalid --module-style: %s (expected auto, compact, or spaced)\n%!" s;
     exit 1
 
+let parse_comment_style = function
+  | "auto" -> Rocqformat_layout.CommentAuto
+  | "preserve" -> Rocqformat_layout.CommentPreserve
+  | s ->
+    Printf.eprintf "Invalid --comment-style: %s (expected auto or preserve)\n%!" s;
+    exit 1
+
+let parse_assumption_style = function
+  | "auto" -> Rocqformat_layout.AssumptionAuto
+  | "compact" -> Rocqformat_layout.AssumptionCompact
+  | "spaced" -> Rocqformat_layout.AssumptionSpaced
+  | s ->
+    Printf.eprintf "Invalid --assumption-style: %s (expected auto, compact, or spaced)\n%!" s;
+    exit 1
+
 let project_file_names = ["_CoqProject"; "RocqProject"]
 
 let discover_project_file files =
-  match files with
-  | [] -> None
-  | file :: _ ->
-    let dir =
-      let file = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file in
-      Filename.dirname file
-    in
+  let search_from dir =
     let rec find = function
       | [] -> None
       | name :: rest ->
@@ -128,6 +142,66 @@ let discover_project_file files =
         | None -> find rest
     in
     find project_file_names
+  in
+  match files with
+  | [] -> search_from (Sys.getcwd ())
+  | file :: _ ->
+    let file = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file in
+    search_from (Filename.dirname file)
+
+let project_root project_file =
+  Filename.dirname project_file
+
+let scan_project_v_files dir =
+  let rec walk acc dir =
+    if not (Sys.file_exists dir) then acc
+    else
+      Array.fold_left (fun acc name ->
+          if name = "." || name = ".." then acc
+          else
+            let path = Filename.concat dir name in
+            if Sys.is_directory path then walk acc path
+            else if Filename.check_suffix name ".v" then path :: acc
+            else acc)
+        acc (Sys.readdir dir)
+  in
+  walk [] dir |> List.sort compare
+
+let list_project_v_files project_file =
+  let warning_fn msg = Printf.eprintf "Warning: %s\n%!" msg in
+  let project = CoqProject_file.read_project_file ~warning_fn project_file in
+  let root = project_root project_file in
+  let listed =
+    project
+    |> CoqProject_file.all_files
+    |> fun files -> CoqProject_file.files_by_suffix files [".v"]
+    |> List.map (fun f ->
+        let path = CoqProject_file.forget_source f in
+        if Filename.is_relative path then Filename.concat root path else path)
+  in
+  if listed <> [] then listed
+  else scan_project_v_files root
+
+let dedup_paths paths =
+  let rec loop acc = function
+    | [] -> List.rev acc
+    | p :: rest ->
+      if List.mem p acc then loop acc rest
+      else loop (p :: acc) rest
+  in
+  loop [] paths
+
+let expand_project_files acc =
+  if not acc.format_project then acc
+  else
+    match acc.layout.project_file with
+    | None ->
+      Printf.eprintf
+        "rocqformat: --format-project requires --project=FILE or --project-auto\n%!";
+      exit 1
+    | Some project_file ->
+      let project_files = list_project_v_files project_file in
+      { acc with files = dedup_paths (acc.files @ project_files) }
 
 let expand_project_args extras project_file =
   let warning_fn msg = Printf.eprintf "Warning: %s\n%!" msg in
@@ -142,20 +216,25 @@ let expand_project_args extras project_file =
     Printf.eprintf "rocqformat: cannot open project file %s: %s\n%!" project_file msg;
     exit 1
 
+let apply_project_opts opts project_file =
+  let args = expand_project_args [] project_file in
+  fst (Coqargs.parse_args ~init:opts args)
+
 let finalize_parsing acc extras =
   let acc =
     match acc.layout.project_file with
     | Some _ -> acc
-    | None when acc.layout.project_auto ->
+    | None when acc.layout.project_auto || acc.format_project ->
       (match discover_project_file acc.files with
        | None -> acc
        | Some file -> update_layout acc (fun l -> { l with project_file = Some file }))
     | None -> acc
   in
-  let extras =
-    match acc.layout.project_file with
-    | None -> extras
-    | Some file -> expand_project_args extras file
+  let acc = expand_project_files acc in
+  let acc =
+    if acc.format_project && not acc.layout.continue_on_error then
+      update_layout acc (fun l -> { l with continue_on_error = true })
+    else acc
   in
   acc, extras
 
@@ -176,6 +255,8 @@ let rec parse acc = function
       parse (update_layout acc (fun l -> { l with compact = false })) rest
   | "--project-auto" :: rest ->
       parse (update_layout acc (fun l -> { l with project_auto = true })) rest
+  | "--format-project" :: rest ->
+      parse { acc with format_project = true } rest
   | arg :: rest when String.length arg > 11 && String.sub arg 0 11 = "--if-style=" ->
       let style = parse_if_style (String.sub arg 11 (String.length arg - 11)) in
       parse (update_layout acc (fun l -> { l with if_layout = style })) rest
@@ -191,6 +272,12 @@ let rec parse acc = function
   | arg :: rest when String.length arg > 15 && String.sub arg 0 15 = "--module-style=" ->
       let style = parse_module_style (String.sub arg 15 (String.length arg - 15)) in
       parse (update_layout acc (fun l -> { l with module_style = style })) rest
+  | arg :: rest when String.length arg > 16 && String.sub arg 0 16 = "--comment-style=" ->
+      let style = parse_comment_style (String.sub arg 16 (String.length arg - 16)) in
+      parse (update_layout acc (fun l -> { l with comment_style = style })) rest
+  | arg :: rest when String.length arg > 19 && String.sub arg 0 19 = "--assumption-style=" ->
+      let style = parse_assumption_style (String.sub arg 19 (String.length arg - 19)) in
+      parse (update_layout acc (fun l -> { l with assumption_style = style })) rest
   | arg :: rest when String.length arg > 10 && String.sub arg 0 10 = "--project=" ->
       let file = String.sub arg 10 (String.length arg - 10) in
       parse (update_layout acc (fun l -> { l with project_file = Some file })) rest

@@ -90,6 +90,11 @@ let custom_rocqformat :
     parse_extra = (fun opts extras ->
         let fmt_args, extras = Rocqformat_args.parse extras in
         Rocqformat_args.validate fmt_args;
+        let opts =
+          match fmt_args.layout.project_file with
+          | None -> opts
+          | Some file -> Rocqformat_args.apply_project_opts opts file
+        in
         let stm_opts, extras = Stmargs.parse_args opts extras in
         (fmt_args, stm_opts), extras);
     usage = Rocqformat_args.usage;
