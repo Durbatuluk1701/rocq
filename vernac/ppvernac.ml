@@ -557,10 +557,13 @@ let pr_rec_definition (rec_order, { fname; univs; binders; rtype; body_def; nota
   ++ prlist pr_where_notation notations
 
 let pr_statement head (idpl,(bl,c)) =
+  let policy = !Format_policy.active in
+  let sig_ind = policy.signature_break_indent in
+  let body_ind = policy.body_break_indent in
   hov 2
-    (head ++ spc() ++ pr_ident_decl idpl ++ spc() ++
-     (match bl with [] -> mt() | _ -> pr_binders bl ++ spc()) ++
-     str":" ++ pr_spc_lconstr c)
+    (head ++ spc() ++ pr_ident_decl idpl ++
+     (match bl with [] -> mt() | _ -> spc() ++ pr_binders bl) ++
+     brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_spc_lconstr c)
 
 let pr_rew_rule (ubinders, lhs, rhs) =
   let binders = match ubinders with None -> mt()
@@ -760,9 +763,16 @@ let pr_extend s cl =
       | Egramml.GramTerminal s :: rl, cl -> str s :: aux rl cl
       | [], [] -> []
       | _ -> assert false in
-    hov 1 (pr_sequence identity (aux rl cl))
+    hov 0 (pr_sequence identity (aux rl cl))
   with Not_found ->
     hov 1 (str "TODO(" ++ str s.ext_entry ++ spc () ++ prlist_with_sep sep pr_arg cl ++ str ")")
+
+let pr_def_assign_break body_ind body doc =
+  match body.CAst.v with
+  | Constrexpr.CIf _ -> fnl () ++ doc
+  | Constrexpr.CLambdaN _ | CProdN _ | CLetIn _ | CFix _ | CCoFix _ | CLetTuple _ ->
+      spc () ++ doc
+  | _ -> brk (1, body_ind) ++ doc
 
 let pr_synpure_vernac_expr v =
   let return = tag_vernac v in
@@ -884,13 +894,22 @@ let pr_synpure_vernac_expr v =
     in
     let pr_def_body = match b with
       | DefineBody (bl,red,body,d) ->
+        let policy = !Format_policy.active in
+        let sig_ind = policy.signature_break_indent in
+        let body_ind = policy.body_break_indent in
         let ty = match d with
           | None -> mt()
-          | Some ty -> spc() ++ str":" ++ pr_spc_lconstr ty
+          | Some ty ->
+            brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_spc_lconstr ty
         in
-        pr_binders_arg bl  ++ ty ++ str " :=" ++ spc() ++ pr_reduce red ++ pr_lconstr body
+        let body_doc = pr_reduce red ++ pr_lconstr body in
+        pr_binders_arg bl ++ ty ++ brk(0, body_ind) ++ str " :="
+        ++ pr_def_assign_break body_ind body body_doc
       | ProveBody (bl,t) ->
-        let typ u = if isgoal then (assert (bl = []); u) else (str" :" ++ u) in
+        let policy = !Format_policy.active in
+        let sig_ind = policy.signature_break_indent in
+        let body_ind = policy.body_break_indent in
+        let typ u = if isgoal then (assert (bl = []); u) else (brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ u) in
         pr_binders_arg bl ++ typ (pr_spc_lconstr t)
     in
     return (

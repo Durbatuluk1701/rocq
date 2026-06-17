@@ -30,6 +30,37 @@ end
     state. *)
 val process_expr : state:State.t -> Vernacexpr.vernac_control -> State.t
 
+(** Layout parameters for source formatting. *)
+type format_layout = {
+  box_level : int;
+  extra_blank_line : bool;
+  (** When [true], interpretation errors on a command do not abort formatting
+      of subsequent commands. Already pretty-printed commands are preserved. *)
+  continue_on_error : bool;
+  block_indent : int;
+  proof_indent : int;
+  proof_margin : int;
+  compact : bool;
+}
+
+val default_format_layout : format_layout
+
+(** [format_ast ?layout ?indent ?trailing_newlines fmt ast comments] Pretty-prints
+    a parsed vernacular command to [fmt], preserving comments from the parser. *)
+val format_ast :
+  ?layout:format_layout -> ?indent:int -> ?trailing_newlines:int ->
+  Format.formatter -> Vernacexpr.vernac_control ->
+  ((int * int) * string) list -> unit
+
+(** [format_file ?layout ~output ~check ~state file] Parses [file] using Rocq's
+    parser, optionally interprets commands to keep grammar state in sync,
+    and pretty-prints each command to [output]. When [check] is [false],
+    type-checking is skipped (as with [rocq compile -vos]). *)
+val format_file :
+  ?layout:format_layout ->
+  output:Format.formatter -> check:bool -> state:State.t ->
+  ?source:Loc.source -> string -> State.t
+
 (** [load_vernac sid file] Loads [file] on top of [sid].
     Callers are expected to handle and print errors in form of exceptions. *)
 val load_vernac : ?beautify:bool -> check:bool ->

@@ -51,8 +51,8 @@ let rec head_bound env sigma t = match EConstr.kind sigma t with
 | Evar _ | Rel _ | Meta _ | Sort _ | Fix _ | Lambda _
 | CoFix _ | Int _ | Float _ | String _ | Array _ -> raise Bound
 
-let head_constr sigma c =
-  try head_bound sigma c
+let head_constr env sigma c =
+  try head_bound env sigma c
   with Bound -> user_err (Pp.str "Head identifier must be a constant, section variable, \
                                   (co)inductive type, (co)inductive type constructor, or projection.")
 

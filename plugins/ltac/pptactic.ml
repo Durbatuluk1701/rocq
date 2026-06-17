@@ -542,9 +542,9 @@ let pr_goal_selector ~toplevel s =
 
   let pr_match_hyps pr_pat = function
     | Hyp (nal,mp) ->
-      pr_lname nal ++ str ":" ++ pr_match_pattern pr_pat mp
+      pr_lname nal ++ spc () ++ str ":" ++ spc () ++ pr_match_pattern pr_pat mp
     | Def (nal,mv,mp) ->
-      pr_lname nal ++ str ":=" ++ pr_match_pattern pr_pat mv
+      pr_lname nal ++ spc () ++ str ":=" ++ spc () ++ pr_match_pattern pr_pat mv
       ++ str ":" ++ pr_match_pattern pr_pat mp
 
   let pr_match_rule m pr pr_pat = function
@@ -570,6 +570,10 @@ let pr_goal_selector ~toplevel s =
   let pr_funvar n = spc () ++ Name.print n
 
   let pr_let_clause pr_gen pr_arg (na,(bl,t)) =
+    let print_rhs arg =
+      let doc = pr_arg (CAst.make (TacArg arg)) in
+      str "(" ++ doc ++ str ")"
+    in
     let pr = function
       | TacGeneric (_,arg) ->
          let name = string_of_genarg_arg (genarg_tag arg) in
@@ -578,7 +582,7 @@ let pr_goal_selector ~toplevel s =
            pr_gen ltop arg
          else
            str name ++ str ":" ++ surround (pr_gen ltop arg)
-      | _ -> pr_arg (CAst.make (TacArg t)) in
+      | t -> print_rhs t in
     hov 2 (pr_lname na ++ prlist pr_funvar bl ++ str " :=" ++ spc() ++ hov 2 (pr t))
 
 let pr_let_clauses recflag pr_gen pr l =
@@ -661,6 +665,7 @@ let pr_let_clauses recflag pr_gen pr l =
     pr_extend    : int -> ml_tactic_entry -> 'a gen_tactic_arg list -> Pp.t;
     pr_alias     : int -> KerName.t -> 'a gen_tactic_arg list -> Pp.t;
     pr_user_red  : Environ.env -> Evd.evar_map -> 'lev Redexpr.user_red_expr -> Pp.t;
+    is_default_match_type : 'pat -> bool;
   }
 
   constraint 'a = <
@@ -875,10 +880,45 @@ let pr_let_clauses recflag pr_gen pr l =
       pr_atom1
 
     let make_pr_tac env sigma pr strip_prod_binders tag_atom tag =
+        let pr_match_hyps pr_pat =
+          let is_default_type = pr.is_default_match_type in
+          function
+          | Hyp (nal,mp) ->
+            pr_lname nal ++ spc () ++ str ":" ++ spc () ++ pr_match_pattern pr_pat mp
+          | Def (nal,mv,mp) ->
+            let skip_type = match mp with
+              | Term t -> is_default_type t
+              | _ -> false
+            in
+            let ty =
+              if skip_type then mt ()
+              else spc () ++ str ":" ++ spc () ++ pr_match_pattern pr_pat mp
+            in
+            pr_lname nal ++ spc () ++ str ":=" ++ spc () ++ pr_match_pattern pr_pat mv ++ ty
+        in
+        let pr_match_rule m pr_tac pr_pat = function
+          | Pat ([],mp,t) when m ->
+            pr_match_pattern pr_pat mp ++
+              spc () ++ str "=>" ++ brk (1,4) ++ pr_tac t
+          | Pat (rl,mp,t) ->
+            hov 0 (
+              hv 0 (prlist_with_sep pr_comma (pr_match_hyps pr_pat) rl) ++
+                (if not (List.is_empty rl) then spc () else mt ()) ++
+                hov 0 (
+                  str "|-" ++ spc () ++ pr_match_pattern pr_pat mp ++ spc () ++
+                    str "=>" ++ brk (1,4) ++ pr_tac t))
+          | All t -> str "_" ++ spc () ++ str "=>" ++ brk (1,4) ++ pr_tac t
+        in
         let extract_binders = function
           | Tacexp { CAst.loc; v=(TacFun (lvar,body))} -> (lvar,Tacexp body)
           | body -> ([],body) in
         let rec pr_tac inherited tac =
+          let pr_let_body body =
+            match body.CAst.v with
+            | TacThens _ | TacThen _ | TacThens3parts _ | TacAbstract _ ->
+              pr_tac (LevelLt lseq) body
+            | _ -> pr_tac (LevelLe llet) body
+          in
           let return (doc, l) = (tag tac doc, l) in
           let (loc, tac) = CAst.(tac.loc, tac.v) in
           let (strm, prec) = return (match tac with
@@ -894,7 +934,7 @@ let pr_let_clauses recflag pr_gen pr l =
               let llc = List.map (fun (id,t) -> (id,extract_binders t)) llc in
               v 0
                 (pr_let_clauses recflag (pr.pr_generic env sigma) (pr_tac ltop) llc ++ spc () ++
-                 pr_tac (LevelLe llet) u),
+                 pr_let_body u),
               llet
             | TacMatch (lz,t,lrul) ->
               hov 0 (
@@ -1098,6 +1138,7 @@ let pr_let_clauses recflag pr_gen pr l =
       pr_extend = pr_raw_extend_rec @@ pr_raw_tactic_level env sigma;
       pr_alias = pr_raw_alias @@ pr_raw_tactic_level env sigma;
       pr_user_red = Redexpr.pr_raw_user_red_expr;
+      is_default_match_type = (function { CAst.v = CHole _ } -> true | _ -> false);
     } in
     make_pr_tac env sigma
       pr raw_printers
@@ -1130,6 +1171,7 @@ let pr_let_clauses recflag pr_gen pr l =
         pr_extend = pr_glob_extend_rec prtac;
         pr_alias = pr_glob_alias prtac;
         pr_user_red = Redexpr.pr_glob_user_red_expr;
+        is_default_match_type = (fun _ -> false);
       } in
       make_pr_tac env (Evd.from_env env)
         pr glob_printers
@@ -1168,6 +1210,7 @@ let pr_let_clauses recflag pr_gen pr l =
         pr_extend = (fun _ _ _ -> assert false);
         pr_alias = (fun _ _ _ -> assert false);
         pr_user_red = (fun _ _ _ -> assert false);
+        is_default_match_type = (fun _ -> false);
       }
       in
       pr_atom env sigma pr strip_prod_binders_constr tag_atomic_tactic_expr t

@@ -145,6 +145,9 @@ val op_or_type_of_string : string -> op_or_type
 
 val op_or_type_to_string : op_or_type -> string
 
+(** Name used after [#] in [Primitive] declarations (for printing). *)
+val op_or_type_to_register_token : op_or_type -> string
+
 val parse_op_or_type : ?loc:Loc.t -> string -> op_or_type
 
 val univs : t -> UVars.AbstractContext.t

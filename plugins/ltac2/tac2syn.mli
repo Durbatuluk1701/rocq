@@ -80,6 +80,8 @@ module Syntax : sig
 
   val nil : unit seq
   val snoc : 'a seq -> 'b t -> ('a * 'b) seq
+
+  val equal : 'a t -> 'b t -> ('a, 'b) Util.eq option
 end
 
 type syntax_class_rule =
@@ -129,6 +131,10 @@ type notation_target = {
 }
 
 val pr_register_notation : sexpr list -> notation_target -> raw_tacexpr -> Pp.t
+
+val pr_tacsyn : tacsyn -> Pp.t
+
+val is_notation_self_ref : Id.t -> tacsyn -> bool
 
 val register_notation : Attributes.vernac_flags -> sexpr list ->
   notation_target -> 'body -> (qualid option, 'body) notation_interpretation
