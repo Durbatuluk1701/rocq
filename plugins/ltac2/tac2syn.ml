@@ -845,16 +845,29 @@ let is_default_strategy_record e =
 
 let pr_strategy_from_record fields =
   let open Pp in
-  let flag_of_proj proj e =
-    if not (is_true_expr e) then None else
-    let id = Names.Id.to_string (projection_id proj) in
-    if String.equal id "rBeta" then Some (str "beta")
-    else if String.equal id "rMatch" then Some (str "iota")
-    else if String.equal id "rZeta" then Some (str "zeta")
-    else if String.equal id "rDelta" then Some (str "delta")
-    else None
+  let has_field proj = field_bool fields (Id.of_string proj) in
+  let beta = has_field "rBeta" in
+  let rmatch = has_field "rMatch" in
+  let rfix = has_field "rFix" in
+  let rcofix = has_field "rCofix" in
+  let zeta = has_field "rZeta" in
+  let delta = has_field "rDelta" in
+  let iota_flags =
+    if rmatch && rfix && rcofix then [str "iota"]
+    else
+      List.filter_map
+        (fun (enabled, doc) -> if enabled then Some doc else None)
+        [(rmatch, str "match"); (rfix, str "fix"); (rcofix, str "cofix")]
   in
-  let flags = List.filter_map (fun (proj, e) -> flag_of_proj proj e) fields in
+  let flags =
+    List.filter_map
+      (fun (enabled, doc) -> if enabled then Some doc else None)
+      [(beta, str "beta")]
+    @ iota_flags
+    @ List.filter_map
+         (fun (enabled, doc) -> if enabled then Some doc else None)
+         [(zeta, str "zeta"); (delta, str "delta")]
+  in
   prlist_with_sep spc (fun x -> x) flags
 
 let pr_notation_arg = function
