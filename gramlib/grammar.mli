@@ -61,6 +61,7 @@ module type S = sig
     val make : ?loc:Loc.t -> (unit,char) Stream.t -> t
     val comments : t -> ((int * int) * string) list
     val drop_comments : t -> unit
+    val lex_trailing_on_current_line : t -> unit
     val loc : t -> Loc.t
     val consume : t -> int -> unit with_kwstate
   end

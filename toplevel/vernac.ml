@@ -24,15 +24,54 @@ let checknav { CAst.loc; v = { expr } }  =
   if is_navigation_vernac expr && not (is_reset expr) then
     CErrors.user_err ?loc (str "Navigation commands forbidden in files.")
 
-let vernac_beautify fmt ast comments =
+type format_layout = {
+  box_level : int;
+  extra_blank_line : bool;
+  continue_on_error : bool;
+}
+
+let default_format_layout = {
+  box_level = 0;
+  extra_blank_line = true;
+  continue_on_error = false;
+}
+
+let active_format_layout = ref default_format_layout
+
+let pr_trailing_comments ~cmd_end trailing =
+  let rec aux first = function
+    | [] -> mt()
+    | ((b,_), text) :: rest ->
+      let prefix =
+        if first && b <= cmd_end + 2 then spc()
+        else if first then mt()
+        else fnl()
+      in
+      prefix ++ comment [text] ++ aux false rest
+  in
+  aux true trailing
+
+let format_box level doc =
+  if level <= 0 then hov 0 doc else hv level doc
+
+let format_ast ?(layout=default_format_layout) fmt ast comments =
+  let layout = layout in
   try
   Pputils.beautify_comments := comments;
   let loc = Option.cata Loc.unloc (0,0) ast.CAst.loc in
   let before = Pputils.extract_comments (fst loc) in
-  let before = if CList.is_empty before then mt() else comment before ++ fnl() in
-  let com = Ppvernac.pr_vernac ast ++ fnl() in
-  let after = comment (Pputils.extract_comments (snd loc)) in
-  Pp.pp_with fmt (hov 0 (before ++ com ++ after))
+  let before =
+    if CList.is_empty before then mt()
+    else comment before ++ (if layout.extra_blank_line then fnl() else mt())
+  in
+  let com = Ppvernac.pr_vernac ast in
+  let trailing_comments = Pputils.extract_trailing_comments (snd loc) in
+  let after = pr_trailing_comments ~cmd_end:(snd loc) trailing_comments in
+  let trailing =
+    if layout.extra_blank_line then fnl() ++ fnl() else fnl()
+  in
+  let doc = format_box layout.box_level (before ++ com ++ after) ++ trailing in
+  Pp.pp_with fmt doc
   with e ->
     let e, info = Exninfo.capture e in
     let info = match ast.loc with None -> info | Some loc -> Loc.add_loc info loc  in
@@ -124,13 +163,18 @@ let load_vernac_core ~beautify ~check ~state ?source file =
       input_cleanup ();
       state
     | Some ast ->
+      let () = beautify |> Option.iter @@ fun _ ->
+        Procq.Parsable.lex_trailing_on_current_line in_pa
+      in
       let () = beautify |> Option.iter @@ fun beautify ->
-        vernac_beautify beautify ast (Procq.Parsable.comments in_pa);
+        format_ast ~layout:!active_format_layout beautify ast
+          (Procq.Parsable.comments in_pa);
         Procq.Parsable.drop_comments in_pa
       in
 
       checknav ast;
 
+      let prev_state = state in
       let state =
         try_finally
           (fun () ->
@@ -143,13 +187,19 @@ let load_vernac_core ~beautify ~check ~state ?source file =
                    [("cmd", `String (Pp.string_of_ppcmds (Topfmt.pr_cmd_header ast)));
                     ("line", `String lnum)])
                (fun () ->
-             Flags.silently (interp_vernac ~check ~state) ast) ())
+                  if !active_format_layout.continue_on_error then
+                    (try Flags.silently (interp_vernac ~check ~state:prev_state) ast
+                     with reraise ->
+                       let reraise, info = Exninfo.capture reraise in
+                       Feedback.msg_warning (CErrors.iprint (reraise, info));
+                       prev_state)
+                  else
+                    Flags.silently (interp_vernac ~check ~state:prev_state) ast)
+               ())
           ()
           (fun () ->
              let tend = System.get_time () in
-             (* The -time option is only supported from console-based clients
-                due to the way it prints. *)
-             emit_time state ast tstart tend)
+             emit_time prev_state ast tstart tend)
           ()
       in
 
@@ -202,6 +252,16 @@ let open_beautify filename =
   let chan_beautify = open_out (filename^beautify_suffix) in
   let fmt = set_formatter_translator chan_beautify in
   fmt, fun () -> Format.pp_print_flush fmt(); close_out chan_beautify
+
+let format_file ?(layout=default_format_layout) ~output ~check ~state ?source filename =
+  let old_layout = !active_format_layout in
+  Util.try_finally
+    (fun () ->
+       active_format_layout := layout;
+       load_vernac_core ~beautify:(Some output) ~check ~state ?source filename)
+    ()
+    (fun () -> active_format_layout := old_layout)
+    ()
 
 (* Main driver for file loading. For now, we only do one beautify
    pass. *)

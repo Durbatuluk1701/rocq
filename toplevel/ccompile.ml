@@ -104,3 +104,19 @@ let compile_file opts stm_opts copts injections f_in =
 
 let compile_file opts stm_opts copts injections =
   Option.iter (compile_file opts stm_opts copts injections) copts.compile_file
+
+let format_file opts stm_options injections ?layout ~output ~f_in =
+  let open Vernac.State in
+  let long_f_dot_in, long_f_dot_out =
+    ensure_exists_with_prefix ~src:f_in ~tgt:None ~src_ext:".v" ~tgt_ext:".vo" in
+  CLexer.record_comments := true;
+  let doc, sid =
+    Topfmt.(in_phase ~phase:LoadingPrelude) (fun () ->
+        Stm.new_doc Stm.{ doc_type = VoDoc long_f_dot_out; injections })
+      ()
+  in
+  let state = { doc; sid; proof = None; time = None } in
+  let state = Load.load_init_vernaculars opts ~state in
+  let ldir = Stm.get_ldir ~doc:state.doc in
+  let source = source ldir long_f_dot_in in
+  ignore (Vernac.format_file ?layout ~output ~check:true ~state ~source long_f_dot_in)
