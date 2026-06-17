@@ -29,6 +29,11 @@ type inductive_style = Format_policy.inductive_style =
   | InductiveCompact
   | InductiveVerbose
 
+type module_style = Format_policy.module_style =
+  | ModuleAuto
+  | ModuleCompact
+  | ModuleSpaced
+
 type t = {
   margin : int;
   max_indent : int;
@@ -46,7 +51,9 @@ type t = {
   header_style : header_style;
   notation_style : notation_style;
   inductive_style : inductive_style;
+  module_style : module_style;
   project_file : string option;
+  project_auto : bool;
 }
 
 let default = {
@@ -66,7 +73,9 @@ let default = {
   header_style = HeaderPreserve;
   notation_style = NotationInline;
   inductive_style = InductiveAuto;
+  module_style = ModuleAuto;
   project_file = None;
+  project_auto = false;
 }
 
 let max_indent_of_margin margin =
@@ -98,6 +107,7 @@ let apply_format_policy layout =
     header_style = layout.header_style;
     notation_style = layout.notation_style;
     inductive_style = layout.inductive_style;
+    module_style = layout.module_style;
   }
 
 let preserve_header_spacing s =

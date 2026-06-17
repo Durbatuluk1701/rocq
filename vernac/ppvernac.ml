@@ -221,8 +221,8 @@ let pr_abbreviation pr (ids, c) =
   pr c ++ spc () ++ prlist_with_sep spc pr_id ids
 
 let pr_at_level = function
-  | NumLevel n -> spc () ++ keyword "at" ++ spc () ++ keyword "level" ++ spc () ++ int n
-  | NextLevel -> spc () ++ keyword "at" ++ spc () ++ keyword "next" ++ spc () ++ keyword "level"
+  | NumLevel n -> keyword "at" ++ spc () ++ keyword "level" ++ spc () ++ int n
+  | NextLevel -> keyword "at" ++ spc () ++ keyword "next" ++ spc () ++ keyword "level"
   | DefaultLevel -> mt ()
 
 let level_of_pattern_level = function None -> DefaultLevel | Some n -> NumLevel n
@@ -374,6 +374,24 @@ let pr_with_declaration pr_c = function
     keyword "Module" ++ spc() ++ pr_lfqid id ++ str" := " ++
     pr_qualid qid
 
+let is_simple_module_type = function
+  | { v = CMident _ } -> true
+  | _ -> false
+
+let use_compact_module_layout binders =
+  let policy = !Format_policy.active in
+  match policy.module_style with
+  | Format_policy.ModuleCompact -> true
+  | Format_policy.ModuleSpaced -> false
+  | Format_policy.ModuleAuto ->
+    List.for_all (fun (_, _, (mty, _)) -> is_simple_module_type mty) binders
+
+let use_compact_module_apply () =
+  let policy = !Format_policy.active in
+  match policy.module_style with
+  | Format_policy.ModuleCompact | Format_policy.ModuleAuto -> true
+  | Format_policy.ModuleSpaced -> false
+
 let rec pr_module_ast leading_space pr_c = function
   | { loc ; v = CMident qid } ->
     if leading_space then
@@ -385,7 +403,8 @@ let rec pr_module_ast leading_space pr_c = function
     let p = pr_with_declaration pr_c decl in
     m ++ spc() ++ keyword "with" ++ spc() ++ p
   | { v = CMapply (me1, me2 ) } ->
-    pr_module_ast leading_space pr_c me1 ++ spc() ++ pr_located pr_qualid (me2.loc, me2)
+    let sep = if use_compact_module_apply () then mt () else spc () in
+    pr_module_ast leading_space pr_c me1 ++ sep ++ pr_located pr_qualid (me2.loc, me2)
 
 let pr_inline = function
   | DefaultInline -> mt ()
@@ -401,9 +420,9 @@ let pr_module_ast_inl leading_space pr_c (mast,inl) =
   pr_module_ast leading_space pr_c mast ++ pr_inline inl
 
 let pr_of_module_type prc = function
-  | Enforce mty -> str ":" ++ pr_module_ast_inl true prc mty
+  | Enforce mty -> spc () ++ str ":" ++ pr_module_ast_inl true prc mty
   | Check mtys ->
-    prlist_strict (fun m -> str "<:" ++ pr_module_ast_inl true prc m) mtys
+    prlist_strict (fun m -> spc () ++ str "<:" ++ pr_module_ast_inl true prc m) mtys
 
 let pr_export_flag = function
   | Export -> keyword "Export"
@@ -417,14 +436,18 @@ let pr_require_token = function
     pr_export_with_cats export ++ spc ()
   | None -> mt()
 
-let pr_module_vardecls pr_c (export,idl,(mty,inl)) =
-  let m = pr_module_ast true pr_c mty in
-  spc() ++
-  hov 1 (str"(" ++ pr_require_token export ++
-         prlist_with_sep spc pr_lident idl ++ str":" ++ m ++ str")")
+let pr_module_vardecls pr_c compact (export,idl,(mty,inl)) =
+  let m = pr_module_ast (not compact) pr_c mty in
+  let body =
+    pr_require_token export ++
+    prlist_with_sep spc pr_lident idl ++ str ":" ++ m
+  in
+  if compact then str "(" ++ body ++ str ")"
+  else spc() ++ hov 1 (str "(" ++ body ++ str ")")
 
 let pr_module_binders l pr_c =
-  prlist_strict (pr_module_vardecls pr_c) l
+  let compact = use_compact_module_layout l in
+  prlist_strict (pr_module_vardecls pr_c compact) l
 
 let pr_type_option pr_c = function
   | { v = CHole (Some GNamedHole _) } as c -> brk(0,2) ++ str" :" ++ pr_c c
@@ -519,7 +542,7 @@ let pr_syntax_modifier = let open Gramlib.Gramext in CAst.with_val (function
     | SetItemScope (l,s) ->
       prlist_with_sep sep_v2 str l ++ spc () ++ str"in scope" ++ str s
     | SetLevel n -> pr_at_level (NumLevel n)
-    | SetCustomEntry (s,n) -> keyword "in" ++ spc() ++ keyword "custom" ++ spc() ++ pr_qualid s ++ (match n with None -> mt () | Some n -> pr_at_level (NumLevel n))
+    | SetCustomEntry (s,n) -> keyword "in" ++ spc() ++ keyword "custom" ++ spc() ++ pr_qualid s ++ (match n with None -> mt () | Some n -> spc () ++ pr_at_level (NumLevel n))
     | SetAssoc BothA -> assert false
     | SetAssoc LeftA -> keyword "left associativity"
     | SetAssoc RightA -> keyword "right associativity"

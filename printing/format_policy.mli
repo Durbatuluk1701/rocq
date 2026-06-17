@@ -19,6 +19,11 @@ type inductive_style =
   | InductiveCompact
   | InductiveVerbose
 
+type module_style =
+  | ModuleAuto
+  | ModuleCompact
+  | ModuleSpaced
+
 type t = {
   block_indent : int;
   proof_indent : int;
@@ -30,6 +35,7 @@ type t = {
   header_style : header_style;
   notation_style : notation_style;
   inductive_style : inductive_style;
+  module_style : module_style;
 }
 
 val default : t

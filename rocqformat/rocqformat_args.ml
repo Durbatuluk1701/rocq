@@ -48,7 +48,9 @@ rocqformat specific options:\
 \n  --header-style=preserve|compact  blank lines after copyright blocks (default preserve)\
 \n  --notation-style=inline|auto  Reserved/Notation modifier layout (default inline)\
 \n  --inductive-style=auto|compact|verbose  inductive constructor layout (default auto)\
+\n  --module-style=auto|compact|spaced  module/functor binder layout (default auto)\
 \n  --project=FILE            read -R/-Q paths from a RocqProject/_CoqProject file\
+\n  --project-auto            search for _CoqProject near input files\
 \n\
 \nrocqformat uses Rocq's parser and pretty-printer. Pass standard Rocq\
 \noptions (-R, -Q, -boot, -noinit, ...) before the file names.\
@@ -100,6 +102,33 @@ let parse_inductive_style = function
     Printf.eprintf "Invalid --inductive-style: %s (expected auto, compact, or verbose)\n%!" s;
     exit 1
 
+let parse_module_style = function
+  | "auto" -> Rocqformat_layout.ModuleAuto
+  | "compact" -> Rocqformat_layout.ModuleCompact
+  | "spaced" -> Rocqformat_layout.ModuleSpaced
+  | s ->
+    Printf.eprintf "Invalid --module-style: %s (expected auto, compact, or spaced)\n%!" s;
+    exit 1
+
+let project_file_names = ["_CoqProject"; "RocqProject"]
+
+let discover_project_file files =
+  match files with
+  | [] -> None
+  | file :: _ ->
+    let dir =
+      let file = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file in
+      Filename.dirname file
+    in
+    let rec find = function
+      | [] -> None
+      | name :: rest ->
+        match CoqProject_file.find_project_file ~from:dir ~projfile_name:name with
+        | Some _ as found -> found
+        | None -> find rest
+    in
+    find project_file_names
+
 let expand_project_args extras project_file =
   let warning_fn msg = Printf.eprintf "Warning: %s\n%!" msg in
   try
@@ -114,6 +143,15 @@ let expand_project_args extras project_file =
     exit 1
 
 let finalize_parsing acc extras =
+  let acc =
+    match acc.layout.project_file with
+    | Some _ -> acc
+    | None when acc.layout.project_auto ->
+      (match discover_project_file acc.files with
+       | None -> acc
+       | Some file -> update_layout acc (fun l -> { l with project_file = Some file }))
+    | None -> acc
+  in
   let extras =
     match acc.layout.project_file with
     | None -> extras
@@ -136,6 +174,8 @@ let rec parse acc = function
       parse (update_layout acc (fun l -> { l with extra_blank_line = false })) rest
   | "--no-compact" :: rest ->
       parse (update_layout acc (fun l -> { l with compact = false })) rest
+  | "--project-auto" :: rest ->
+      parse (update_layout acc (fun l -> { l with project_auto = true })) rest
   | arg :: rest when String.length arg > 11 && String.sub arg 0 11 = "--if-style=" ->
       let style = parse_if_style (String.sub arg 11 (String.length arg - 11)) in
       parse (update_layout acc (fun l -> { l with if_layout = style })) rest
@@ -148,6 +188,9 @@ let rec parse acc = function
   | arg :: rest when String.length arg > 18 && String.sub arg 0 18 = "--inductive-style=" ->
       let style = parse_inductive_style (String.sub arg 18 (String.length arg - 18)) in
       parse (update_layout acc (fun l -> { l with inductive_style = style })) rest
+  | arg :: rest when String.length arg > 15 && String.sub arg 0 15 = "--module-style=" ->
+      let style = parse_module_style (String.sub arg 15 (String.length arg - 15)) in
+      parse (update_layout acc (fun l -> { l with module_style = style })) rest
   | arg :: rest when String.length arg > 10 && String.sub arg 0 10 = "--project=" ->
       let file = String.sub arg 10 (String.length arg - 10) in
       parse (update_layout acc (fun l -> { l with project_file = Some file })) rest
