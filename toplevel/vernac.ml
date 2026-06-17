@@ -288,6 +288,7 @@ let load_vernac_core ~beautify ~check ~state ?source file =
       let () = beautify |> Option.iter @@ fun _ ->
         Procq.Parsable.lex_trailing_on_current_line in_pa
       in
+      let format_ctx_update = ref None in
       let () = beautify |> Option.iter @@ fun beautify ->
         let layout = !active_format_layout in
         let ctx = !active_format_context in
@@ -295,6 +296,7 @@ let load_vernac_core ~beautify ~check ~state ?source file =
         let content = format_to_buffer layout ast
           (Procq.Parsable.comments in_pa) in
         let single = Format_policy.is_single_line content in
+        format_ctx_update := Some (ctx, single, ast.v.expr);
         let trailing = trailing_newlines layout single in
         let indented = Format_policy.indent_text indent content in
         let doc =
@@ -305,10 +307,6 @@ let load_vernac_core ~beautify ~check ~state ?source file =
         in
         Pp.pp_with beautify doc;
         Format.pp_print_flush beautify ();
-        let next_ctx =
-          adjust_block_depth (update_format_context ctx ast.v.expr) ast.v.expr
-        in
-        active_format_context := { next_ctx with prev_single_line = single };
         Procq.Parsable.drop_comments in_pa
       in
 
@@ -341,6 +339,16 @@ let load_vernac_core ~beautify ~check ~state ?source file =
              let tend = System.get_time () in
              emit_time prev_state ast tstart tend)
           ()
+      in
+
+      let () =
+        if state != prev_state then
+          Option.iter (fun (ctx, single, expr) ->
+              let next_ctx =
+                adjust_block_depth (update_format_context ctx expr) expr
+              in
+              active_format_context := { next_ctx with prev_single_line = single })
+            !format_ctx_update
       in
 
       (loop [@ocaml.tailcall]) state

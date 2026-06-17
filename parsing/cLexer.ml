@@ -490,9 +490,9 @@ let rec lex_trailing_on_current_line loc s =
       Stream.junk () s;
       lex_trailing_on_current_line loc s
   | Some '(' ->
-      Stream.junk () s;
-      (match Stream.peek () s with
+      (match Stream.nth () 1 s with
        | Some '*' ->
+           Stream.junk () s;
            let bp = Stream.count s - 2 in
            Stream.junk () s;
            comm_loc bp;

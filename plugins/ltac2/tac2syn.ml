@@ -832,6 +832,23 @@ let rec field_bool fields proj =
   | _ :: fields -> field_bool fields proj
   | [] -> false
 
+let rec field_expr fields proj =
+  let proj_s = Id.to_string proj in
+  match fields with
+  | (p, v) :: _ when String.equal (Id.to_string (projection_id p)) proj_s -> Some v
+  | _ :: fields -> field_expr fields proj
+  | [] -> None
+
+let is_strength_ctor name = function
+  | {CAst.v=CTacCst (AbsKn (Other kn))} ->
+    String.equal (Names.Id.to_string (KerName.label kn)) name
+  | _ -> false
+
+let field_has_head_strength fields =
+  match field_expr fields (Id.of_string "rStrength") with
+  | Some v -> is_strength_ctor "Head" v
+  | None -> false
+
 let is_default_strategy_record e =
   match e.CAst.v with
   | CTacRec (None, fields) when List.exists is_red_flags_field fields ->
@@ -841,6 +858,7 @@ let is_default_strategy_record e =
     && field_bool fields (Id.of_string "rCofix")
     && field_bool fields (Id.of_string "rZeta")
     && field_bool fields (Id.of_string "rDelta")
+    && not (field_has_head_strength fields)
   | _ -> false
 
 let pr_strategy_from_record fields =
@@ -852,6 +870,9 @@ let pr_strategy_from_record fields =
   let rcofix = has_field "rCofix" in
   let zeta = has_field "rZeta" in
   let delta = has_field "rDelta" in
+  let strength =
+    if field_has_head_strength fields then [str "head"] else []
+  in
   let iota_flags =
     if rmatch && rfix && rcofix then [str "iota"]
     else
@@ -868,7 +889,7 @@ let pr_strategy_from_record fields =
          (fun (enabled, doc) -> if enabled then Some doc else None)
          [(zeta, str "zeta"); (delta, str "delta")]
   in
-  prlist_with_sep spc (fun x -> x) flags
+  prlist_with_sep spc (fun x -> x) (strength @ flags)
 
 let pr_notation_arg = function
   | _, {CAst.v=CTacRec (None, fields)} when List.exists is_red_flags_field fields ->
