@@ -344,13 +344,13 @@ let pr_hints db h pr_c pr_pat =
     | HintsUnfold l ->
       keyword "Unfold" ++ spc () ++ prlist_with_sep sep pr_qualid l
     | HintsTransparency (l, b) ->
-      keyword (if b then "Transparent" else "Opaque")
+      (match l with
+       | HintsVariables -> keyword "Variables"
+       | HintsConstants -> keyword "Constants"
+       | HintsProjections -> keyword "Projections"
+       | HintsReferences l -> prlist_with_sep sep pr_qualid l)
       ++ spc ()
-      ++ (match l with
-          | HintsVariables -> keyword "Variables"
-          | HintsConstants -> keyword "Constants"
-          | HintsProjections -> keyword "Projections"
-          | HintsReferences l -> prlist_with_sep sep pr_qualid l)
+      ++ keyword (if b then "Transparent" else "Opaque")
     | HintsMode (m, l) ->
       keyword "Mode"
       ++ spc ()
@@ -760,7 +760,7 @@ let pr_extend s cl =
       | Egramml.GramTerminal s :: rl, cl -> str s :: aux rl cl
       | [], [] -> []
       | _ -> assert false in
-    hov 1 (pr_sequence identity (aux rl cl))
+    hov 0 (pr_sequence identity (aux rl cl))
   with Not_found ->
     hov 1 (str "TODO(" ++ str s.ext_entry ++ spc () ++ prlist_with_sep sep pr_arg cl ++ str ")")
 
@@ -1018,12 +1018,12 @@ let pr_synpure_vernac_expr v =
   | VernacUniverse v ->
     return (
       hov 2 (keyword "Universe" ++ spc () ++
-             prlist_with_sep (fun _ -> str",") pr_lident v)
+             prlist_with_sep spc pr_lident v)
     )
   | VernacSort v ->
     return (
       hov 2 (keyword "Sort" ++ spc () ++
-             prlist_with_sep (fun _ -> str",") pr_lident v)
+             prlist_with_sep spc pr_lident v)
     )
   | VernacConstraint v ->
     return (
@@ -1308,7 +1308,7 @@ let pr_synpure_vernac_expr v =
       (keyword "Primitive" ++ spc() ++ pr_ident_decl id ++
        (Option.cata (fun ty -> spc() ++ str":" ++ pr_spc_lconstr ty) (mt()) typopt) ++ spc() ++
        str ":=" ++ spc() ++
-       str (CPrimitives.op_or_type_to_string r))
+       str ("#" ^ CPrimitives.op_or_type_to_register_token r))
   | VernacComments l ->
     return (
       hov 2

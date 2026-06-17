@@ -810,6 +810,167 @@ let interp_notation ?loc scopes syn
   let args = interp_notation_args rule data.nota_tok args in
   data.nota_body, args
 
+let projection_id = function
+  | RelId qid -> Libnames.qualid_basename qid
+  | AbsKn kn -> KerName.label kn
+
+let is_red_flags_field = function
+  | proj, _ ->
+    let id = Names.Id.to_string (projection_id proj) in
+    String.equal id "rBeta" || String.equal id "rStrength"
+
+let is_true_expr = function
+  | {CAst.v=CTacCst (AbsKn (Other kn))} ->
+    String.equal (Names.Id.to_string (KerName.label kn)) "true"
+  | _ -> false
+
+let rec field_bool fields proj =
+  let proj_s = Id.to_string proj in
+  match fields with
+  | (p, v) :: _ when String.equal (Id.to_string (projection_id p)) proj_s ->
+    is_true_expr v
+  | _ :: fields -> field_bool fields proj
+  | [] -> false
+
+let is_default_strategy_record e =
+  match e.CAst.v with
+  | CTacRec (None, fields) when List.exists is_red_flags_field fields ->
+    field_bool fields (Id.of_string "rBeta")
+    && field_bool fields (Id.of_string "rMatch")
+    && field_bool fields (Id.of_string "rFix")
+    && field_bool fields (Id.of_string "rCofix")
+    && field_bool fields (Id.of_string "rZeta")
+    && field_bool fields (Id.of_string "rDelta")
+  | _ -> false
+
+let pr_strategy_from_record fields =
+  let open Pp in
+  let has_field proj = field_bool fields (Id.of_string proj) in
+  let beta = has_field "rBeta" in
+  let rmatch = has_field "rMatch" in
+  let rfix = has_field "rFix" in
+  let rcofix = has_field "rCofix" in
+  let zeta = has_field "rZeta" in
+  let delta = has_field "rDelta" in
+  let iota_flags =
+    if rmatch && rfix && rcofix then [str "iota"]
+    else
+      List.filter_map
+        (fun (enabled, doc) -> if enabled then Some doc else None)
+        [(rmatch, str "match"); (rfix, str "fix"); (rcofix, str "cofix")]
+  in
+  let flags =
+    List.filter_map
+      (fun (enabled, doc) -> if enabled then Some doc else None)
+      [(beta, str "beta")]
+    @ iota_flags
+    @ List.filter_map
+         (fun (enabled, doc) -> if enabled then Some doc else None)
+         [(zeta, str "zeta"); (delta, str "delta")]
+  in
+  prlist_with_sep spc (fun x -> x) flags
+
+let pr_notation_arg = function
+  | _, {CAst.v=CTacRec (None, fields)} when List.exists is_red_flags_field fields ->
+    pr_strategy_from_record fields
+  | _, ({CAst.v=CTacCst (AbsKn (Other kn))} as e) ->
+    if String.equal (Names.Id.to_string (KerName.label kn)) "[]" then Pp.mt ()
+    else Tac2print.pr_rawexpr_gen E5 ~avoid:Id.Set.empty e
+  | _, e -> Tac2print.pr_rawexpr_gen E5 ~avoid:Id.Set.empty e
+
+let lookup_notation_data scopes parsing =
+  let scope_map = ParsedNota.AnyMap.get (Any parsing) !notation_data in
+  match List.find_map (fun sc -> Tac2Scope.Map.find_opt sc scope_map) scopes with
+  | Some data -> data
+  | None ->
+    match Tac2Scope.Map.bindings scope_map with
+    | (_, data) :: _ -> data
+    | [] -> CErrors.user_err Pp.(str "Unknown Ltac2 notation")
+
+let is_nil_expr e =
+  match e.CAst.v with
+  | CTacCst (AbsKn (Other kn)) ->
+    String.equal (Id.to_string (KerName.label kn)) "[]"
+  | _ -> false
+
+let is_no_bindings_expr e =
+  match e.CAst.v with
+  | CTacCst (AbsKn (Other kn)) ->
+    String.equal (Id.to_string (KerName.label kn)) "NoBindings"
+  | CTacRef (RelId qid) when qualid_is_ident qid ->
+    Id.equal (qualid_basename qid) (Id.of_string "NoBindings")
+  | _ -> false
+
+let is_none_expr e =
+  match e.CAst.v with
+  | CTacCst (AbsKn (Other kn)) ->
+    String.equal (Id.to_string (KerName.label kn)) "None"
+  | _ -> false
+
+let is_unit_fun_pat = function
+  | [{ CAst.v = CPatVar Anonymous }] -> true
+  | [{ CAst.v = CPatCnv ({ CAst.v = CPatVar Anonymous }, _) }] -> true
+  | _ -> false
+
+let rec is_default_notation_arg = function
+  | _, arg ->
+    match arg.CAst.v with
+    | CTacCst (AbsKn (Tuple 0)) -> true
+    | CTacFun (pats, body) when is_unit_fun_pat pats ->
+      is_no_bindings_expr body || is_unit_tuple body
+    | CTacRec (None, fields) when List.exists is_red_flags_field fields ->
+      is_default_strategy_record arg
+    | _ -> is_nil_expr arg || is_none_expr arg || is_no_bindings_expr arg
+
+and is_unit_tuple e =
+  match e.CAst.v with
+  | CTacCst (AbsKn (Tuple 0)) -> true
+  | _ -> false
+
+let notation_leading_term toks =
+  List.find_map (function TacTerm s -> Some s | _ -> None) (List.rev toks)
+
+let is_notation_self_ref id syn =
+  let id_s = Id.to_string id in
+  let WithArgs ((rule, _ as parsing), args) = TacSyn.get syn in
+  try
+    let data = lookup_notation_data (current_scopes ()) parsing in
+    match notation_leading_term data.nota_tok with
+    | Some s when String.equal s id_s ->
+      let arglist = interp_notation_args rule data.nota_tok args in
+      List.for_all is_default_notation_arg arglist
+    | _ -> false
+  with _ -> false
+
+let rec pr_notation_tokens toks args =
+  let open Pp in
+  match toks, args with
+  | [], [] -> mt ()
+  | TacTerm s :: toks, args ->
+    let term = str s in
+    let term = match toks with
+      | TacNonTerm _ :: _ -> term ++ spc ()
+      | _ -> term
+    in
+    term ++ pr_notation_tokens toks args
+  | TacNonTerm _ :: toks, (na, arg) :: rest ->
+    let open Pp in
+    let pp = pr_notation_arg (na, arg) in
+    (match toks, rest with
+     | [], [] -> pp
+     | _ -> pp ++ spc () ++ pr_notation_tokens toks rest)
+  | _ -> str "<notation>"
+
+let pr_tacsyn syn =
+  let open Pp in
+  let scopes = current_scopes () in
+  let WithArgs ((rule, _ as parsing), args) = TacSyn.get syn in
+  try
+    let data = lookup_notation_data scopes parsing in
+    let arglist = interp_notation_args rule data.nota_tok args in
+    pr_notation_tokens (List.rev data.nota_tok) (List.rev arglist)
+  with _ -> str "<notation>"
+
 let cache_synext_interp data =
   let add_data m =
     let m = Option.default Tac2Scope.Map.empty m in
@@ -941,3 +1102,5 @@ let register_notation_interpretation data =
 module Internal = struct
   let ltac2_expr = internal_ltac2_expr
 end
+
+let () = Tac2print.register_tacsyn_printer pr_tacsyn

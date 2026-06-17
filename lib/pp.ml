@@ -148,12 +148,54 @@ let qstring s = str (CString.quote_coq_string s)
 let qs = qstring
 let quote s = h (str "\"" ++ s ++ str "\"")
 
-let pr_com ft s =
+let is_blank_line line =
+  let blank = ref true in
+  for i = 0 to String.length line - 1 do
+    if line.[i] <> ' ' && line.[i] <> '\t' then blank := false
+  done;
+  !blank
+
+let count_leading_spaces line =
+  let n = ref 0 in
+  while !n < String.length line && line.[!n] = ' ' do incr n done;
+  !n
+
+let normalize_comment_body s =
   let lines = String.split_on_char '\n' s in
+  match lines with
+  | [] | [_] -> s
+  | first :: rest ->
+    let indents =
+      List.fold_left (fun acc line ->
+          if is_blank_line line then acc
+          else count_leading_spaces line :: acc)
+        [] rest
+    in
+    match indents with
+    | [] -> s
+    | indents ->
+      let min_indent = List.fold_left min max_int indents in
+      if min_indent <= 0 || min_indent = max_int then s
+      else
+        let dedent line =
+          if is_blank_line line then line
+          else
+            let n = count_leading_spaces line in
+            if n >= min_indent then
+              String.sub line min_indent (String.length line - min_indent)
+            else line
+        in
+        String.concat "\n" (first :: List.map dedent rest)
+
+let pr_com ft s =
+  let s = normalize_comment_body s in
+  let lines = String.split_on_char '\n' s in
+  Format.pp_open_tbox ft ();
   List.iteri (fun i line ->
       let () = if i <> 0 then Format.pp_force_newline ft () in
       Format.pp_print_as ft (utf8_length line) line)
     lines;
+  Format.pp_close_tbox ft ();
   Format.pp_print_break ft 0 0
 
 let start_pfx = "start."
