@@ -3,6 +3,6 @@ Inductive nat : Set :=
   | S : forall n : nat, _.
 
 Section S.
-  Variable (n : nat).
-  Definition twice : nat := n.
+    Variable (n : nat).
+    Definition twice : nat := n.
 End S.

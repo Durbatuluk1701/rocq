@@ -344,13 +344,13 @@ let pr_hints db h pr_c pr_pat =
     | HintsUnfold l ->
       keyword "Unfold" ++ spc () ++ prlist_with_sep sep pr_qualid l
     | HintsTransparency (l, b) ->
-      (match l with
-       | HintsVariables -> keyword "Variables"
-       | HintsConstants -> keyword "Constants"
-       | HintsProjections -> keyword "Projections"
-       | HintsReferences l -> prlist_with_sep sep pr_qualid l)
+      keyword (if b then "Transparent" else "Opaque")
       ++ spc ()
-      ++ keyword (if b then "Transparent" else "Opaque")
+      ++ (match l with
+          | HintsVariables -> keyword "Variables"
+          | HintsConstants -> keyword "Constants"
+          | HintsProjections -> keyword "Projections"
+          | HintsReferences l -> prlist_with_sep sep pr_qualid l)
     | HintsMode (m, l) ->
       keyword "Mode"
       ++ spc ()
@@ -557,10 +557,13 @@ let pr_rec_definition (rec_order, { fname; univs; binders; rtype; body_def; nota
   ++ prlist pr_where_notation notations
 
 let pr_statement head (idpl,(bl,c)) =
+  let policy = !Format_policy.active in
+  let sig_ind = policy.signature_break_indent in
+  let body_ind = policy.body_break_indent in
   hov 2
     (head ++ spc() ++ pr_ident_decl idpl ++ spc() ++
      (match bl with [] -> mt() | _ -> pr_binders bl ++ spc()) ++
-     str":" ++ pr_spc_lconstr c)
+     brk(0, sig_ind) ++ str " :" ++ brk(0, body_ind) ++ pr_spc_lconstr c)
 
 let pr_rew_rule (ubinders, lhs, rhs) =
   let binders = match ubinders with None -> mt()
@@ -884,13 +887,20 @@ let pr_synpure_vernac_expr v =
     in
     let pr_def_body = match b with
       | DefineBody (bl,red,body,d) ->
+        let policy = !Format_policy.active in
+        let sig_ind = policy.signature_break_indent in
+        let body_ind = policy.body_break_indent in
         let ty = match d with
           | None -> mt()
-          | Some ty -> spc() ++ str":" ++ pr_spc_lconstr ty
+          | Some ty ->
+            brk(0, sig_ind) ++ str " :" ++ brk(0, body_ind) ++ pr_spc_lconstr ty
         in
-        pr_binders_arg bl  ++ ty ++ str " :=" ++ spc() ++ pr_reduce red ++ pr_lconstr body
+        pr_binders_arg bl ++ ty ++ brk(0, body_ind) ++ str " :=" ++ spc() ++ pr_reduce red ++ pr_lconstr body
       | ProveBody (bl,t) ->
-        let typ u = if isgoal then (assert (bl = []); u) else (str" :" ++ u) in
+        let policy = !Format_policy.active in
+        let sig_ind = policy.signature_break_indent in
+        let body_ind = policy.body_break_indent in
+        let typ u = if isgoal then (assert (bl = []); u) else (brk(0, sig_ind) ++ str" :" ++ brk(0, body_ind) ++ u) in
         pr_binders_arg bl ++ typ (pr_spc_lconstr t)
     in
     return (
@@ -1018,12 +1028,12 @@ let pr_synpure_vernac_expr v =
   | VernacUniverse v ->
     return (
       hov 2 (keyword "Universe" ++ spc () ++
-             prlist_with_sep spc pr_lident v)
+             prlist_with_sep (fun _ -> str",") pr_lident v)
     )
   | VernacSort v ->
     return (
       hov 2 (keyword "Sort" ++ spc () ++
-             prlist_with_sep spc pr_lident v)
+             prlist_with_sep (fun _ -> str",") pr_lident v)
     )
   | VernacConstraint v ->
     return (
@@ -1308,7 +1318,7 @@ let pr_synpure_vernac_expr v =
       (keyword "Primitive" ++ spc() ++ pr_ident_decl id ++
        (Option.cata (fun ty -> spc() ++ str":" ++ pr_spc_lconstr ty) (mt()) typopt) ++ spc() ++
        str ":=" ++ spc() ++
-       str ("#" ^ CPrimitives.op_or_type_to_register_token r))
+       str (CPrimitives.op_or_type_to_string r))
   | VernacComments l ->
     return (
       hov 2

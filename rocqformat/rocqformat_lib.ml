@@ -36,6 +36,8 @@ let formatter_to_string layout f =
   Rocqformat_layout.normalize_output (Buffer.contents buf)
 
 let format_to_string layout opts stm_opts injections file =
+  Rocqformat_layout.apply_globals layout;
+  Rocqformat_layout.apply_format_policy layout;
   let vernac_layout = Rocqformat_layout.to_vernac_layout layout in
   formatter_to_string layout (fun fmt ->
       Ccompile.format_file opts stm_opts injections ~layout:vernac_layout
@@ -70,6 +72,7 @@ let rocqformat_init ((fmt_args : format_config), _stm_opts) _injections ~opts =
   System.trust_file_cache := true;
   Colors.init_color `ON;
   Rocqformat_layout.apply_globals fmt_args.layout;
+  Rocqformat_layout.apply_format_policy fmt_args.layout;
   ignore opts;
   _injections
 

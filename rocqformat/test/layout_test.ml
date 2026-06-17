@@ -24,6 +24,19 @@ let test_normalize_blank_lines _ =
 let test_normalize_empty _ =
   assert_equal "" (normalize_output "")
 
+let test_default_layout _ =
+  assert_equal 2 default.block_indent;
+  assert_equal 2 default.proof_indent;
+  assert_equal true default.compact;
+  assert_equal 4 default.signature_break_indent;
+  assert_equal 2 default.body_break_indent;
+  assert_equal IfAuto default.if_layout;
+  assert_equal 80 (proof_margin default)
+
+let test_proof_margin_override _ =
+  let layout = { default with proof_margin = Some 60; margin = 80 } in
+  assert_equal 60 (proof_margin layout)
+
 let suite =
   "rocqformat_layout" >:::
     [ "max_indent_of_margin" >:: test_max_indent_of_margin
@@ -31,6 +44,8 @@ let suite =
     ; "normalize_final_newline" >:: test_normalize_final_newline
     ; "normalize_blank_lines" >:: test_normalize_blank_lines
     ; "normalize_empty" >:: test_normalize_empty
+    ; "default_layout" >:: test_default_layout
+    ; "proof_margin_override" >:: test_proof_margin_override
     ]
 
 let () = run_test_tt_main suite

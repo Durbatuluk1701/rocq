@@ -37,14 +37,19 @@ type format_layout = {
   (** When [true], interpretation errors on a command do not abort formatting
       of subsequent commands. Already pretty-printed commands are preserved. *)
   continue_on_error : bool;
+  block_indent : int;
+  proof_indent : int;
+  proof_margin : int;
+  compact : bool;
 }
 
 val default_format_layout : format_layout
 
-(** [format_ast ?layout fmt ast comments] Pretty-prints a parsed vernacular
-    command to [fmt], preserving comments from the parser. *)
+(** [format_ast ?layout ?indent ?trailing_newlines fmt ast comments] Pretty-prints
+    a parsed vernacular command to [fmt], preserving comments from the parser. *)
 val format_ast :
-  ?layout:format_layout -> Format.formatter -> Vernacexpr.vernac_control ->
+  ?layout:format_layout -> ?indent:int -> ?trailing_newlines:int ->
+  Format.formatter -> Vernacexpr.vernac_control ->
   ((int * int) * string) list -> unit
 
 (** [format_file ?layout ~output ~check ~state file] Parses [file] using Rocq's

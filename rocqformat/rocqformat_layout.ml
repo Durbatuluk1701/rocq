@@ -11,6 +11,11 @@
 (** Layout policy for [rocqformat], mapping user-facing options to Rocq's
     pretty-printing parameters. *)
 
+type if_layout = Format_policy.if_layout =
+  | IfAuto
+  | IfInline
+  | IfMultiline
+
 type t = {
   margin : int;
   max_indent : int;
@@ -18,6 +23,13 @@ type t = {
   box_level : int;
   extra_blank_line : bool;
   continue_on_error : bool;
+  block_indent : int;
+  proof_indent : int;
+  proof_margin : int option;
+  compact : bool;
+  signature_break_indent : int;
+  body_break_indent : int;
+  if_layout : if_layout;
 }
 
 let default = {
@@ -27,10 +39,20 @@ let default = {
   box_level = 0;
   extra_blank_line = true;
   continue_on_error = false;
+  block_indent = 2;
+  proof_indent = 2;
+  proof_margin = None;
+  compact = true;
+  signature_break_indent = 4;
+  body_break_indent = 2;
+  if_layout = IfAuto;
 }
 
 let max_indent_of_margin margin =
   max (64 * margin / 100) (margin - 30)
+
+let proof_margin layout =
+  Option.default layout.margin layout.proof_margin
 
 let apply_globals layout =
   Topfmt.set_margin (Some layout.margin);
@@ -43,10 +65,25 @@ let configure_formatter layout fmt =
   Format.pp_set_max_boxes fmt layout.max_boxes;
   Format.pp_set_ellipsis_text fmt "..."
 
+let apply_format_policy layout =
+  Format_policy.active := {
+    Format_policy.block_indent = layout.block_indent;
+    proof_indent = layout.proof_indent;
+    proof_margin = proof_margin layout;
+    compact = layout.compact;
+    signature_break_indent = layout.signature_break_indent;
+    body_break_indent = layout.body_break_indent;
+    if_layout = layout.if_layout;
+  }
+
 let to_vernac_layout layout : Vernac.format_layout =
   { box_level = layout.box_level
   ; extra_blank_line = layout.extra_blank_line
   ; continue_on_error = layout.continue_on_error
+  ; block_indent = layout.block_indent
+  ; proof_indent = layout.proof_indent
+  ; proof_margin = proof_margin layout
+  ; compact = layout.compact
   }
 
 (** Normalize formatted text: trim trailing whitespace, ensure a single

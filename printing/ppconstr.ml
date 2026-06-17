@@ -756,16 +756,35 @@ let pr ~flags pr sep lev_after inherited a =
           pr spc lev_after ltop b))
       lletin
   | CIf (c,(na,po),b1,b2) ->
-    (* On force les parenthèses autour d'un "if" sous-terme (même si le
-       parsing est lui plus tolérant) *)
+    let policy = !Format_policy.active in
+    let pr_branch lev_after = pr (fun () -> brk (1,1)) lev_after ltop in
     return (fun lev_after ->
-        hv 0 (
-          hov 1 (keyword "if" ++ spc () ++ pr mt no_after ltop c
-                 ++ pr_simple_return_type (pr mt) na po) ++
-          spc () ++
-          hov 0 (keyword "then"
-                 ++ pr (fun () -> brk (1,1)) no_after ltop b1) ++ spc () ++
-          hov 0 (keyword "else" ++ pr (fun () -> brk (1,1)) lev_after ltop b2)))
+        let if_multiline () =
+          hv 0 (
+            keyword "if" ++ spc () ++ pr mt no_after ltop c
+            ++ pr_simple_return_type (pr mt) na po
+            ++ fnl () ++ keyword "then" ++ spc () ++ pr_branch no_after b1
+            ++ fnl () ++ keyword "else" ++ spc () ++ pr_branch lev_after b2)
+        in
+        let if_inline () =
+          hv 0 (
+            keyword "if" ++ spc () ++ pr mt no_after ltop c
+            ++ pr_simple_return_type (pr mt) na po ++ spc ()
+            ++ keyword "then" ++ spc () ++ pr_branch no_after b1 ++ spc ()
+            ++ keyword "else" ++ spc () ++ pr_branch lev_after b2)
+        in
+        let if_auto () =
+          hv 0 (
+            hov 1 (keyword "if" ++ spc () ++ pr mt no_after ltop c
+                   ++ pr_simple_return_type (pr mt) na po) ++
+            spc () ++
+            hov 0 (keyword "then" ++ pr_branch no_after b1) ++ spc () ++
+            hov 0 (keyword "else" ++ pr_branch lev_after b2))
+        in
+        match policy.if_layout with
+        | Format_policy.IfInline -> if_inline ()
+        | Format_policy.IfMultiline -> if_multiline ()
+        | Format_policy.IfAuto -> if_auto ())
       lif
   | CHole (Some (GNamedHole (false, id))) ->
     return (fun lev_after -> str "?[" ++ pr_id id ++ str "]") latom

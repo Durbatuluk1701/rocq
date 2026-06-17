@@ -38,6 +38,13 @@ rocqformat specific options:\
 \n  --box-level=n         set box level for top-level commands (default 0)\
 \n  --no-extra-blank-lines  do not insert an extra blank line between commands\
 \n  --continue-on-error     keep formatting after command interpretation errors\
+\n  --block-indent=n      indent Section/Module bodies by n spaces (default 2)\
+\n  --proof-indent=n      indent proof scripts by n spaces per level (default 2)\
+\n  --proof-margin=n      wrap proof scripts at n columns (default: margin)\
+\n  --no-compact          keep blank lines between one-line commands\
+\n  --signature-break-indent=n  indent for wrapped type signatures (default 4)\
+\n  --body-break-indent=n       indent for definition bodies (default 2)\
+\n  --if-style=auto|inline|multiline  if/then/else layout (default auto)\
 \n\
 \nrocqformat uses Rocq's parser and pretty-printer. Pass standard Rocq\
 \noptions (-R, -Q, -boot, -noinit, ...) before the file names.\
@@ -59,6 +66,14 @@ let parse_prefixed_int ~opt arg prefix =
 
 let update_layout acc f = { acc with layout = f acc.layout }
 
+let parse_if_style = function
+  | "auto" -> Rocqformat_layout.IfAuto
+  | "inline" -> Rocqformat_layout.IfInline
+  | "multiline" -> Rocqformat_layout.IfMultiline
+  | s ->
+    Printf.eprintf "Invalid --if-style: %s (expected auto, inline, or multiline)\n%!" s;
+    exit 1
+
 let rec parse acc = function
   | "-help" :: _ | "--help" :: _ ->
       Boot.Usage.print_usage stderr usage;
@@ -72,23 +87,43 @@ let rec parse acc = function
       parse { acc with output = Some file } rest
   | "--no-extra-blank-lines" :: rest ->
       parse (update_layout acc (fun l -> { l with extra_blank_line = false })) rest
+  | "--no-compact" :: rest ->
+      parse (update_layout acc (fun l -> { l with compact = false })) rest
+  | arg :: rest when String.length arg > 11 && String.sub arg 0 11 = "--if-style=" ->
+      let style = parse_if_style (String.sub arg 11 (String.length arg - 11)) in
+      parse (update_layout acc (fun l -> { l with if_layout = style })) rest
   | arg :: rest ->
       begin match
         parse_prefixed_int ~opt:"margin" arg "--margin=",
         parse_prefixed_int ~opt:"indent" arg "--indent=",
         parse_prefixed_int ~opt:"depth" arg "--depth=",
-        parse_prefixed_int ~opt:"box-level" arg "--box-level="
+        parse_prefixed_int ~opt:"box-level" arg "--box-level=",
+        parse_prefixed_int ~opt:"block-indent" arg "--block-indent=",
+        parse_prefixed_int ~opt:"proof-indent" arg "--proof-indent=",
+        parse_prefixed_int ~opt:"proof-margin" arg "--proof-margin=",
+        parse_prefixed_int ~opt:"signature-break-indent" arg "--signature-break-indent=",
+        parse_prefixed_int ~opt:"body-break-indent" arg "--body-break-indent="
       with
-      | Some margin, _, _, _ ->
+      | Some margin, _, _, _, _, _, _, _, _ ->
           parse (update_layout acc (fun l ->
               { l with margin; max_indent = Rocqformat_layout.max_indent_of_margin margin }))
             rest
-      | _, Some max_indent, _, _ ->
+      | _, Some max_indent, _, _, _, _, _, _, _ ->
           parse (update_layout acc (fun l -> { l with max_indent })) rest
-      | _, _, Some max_boxes, _ ->
+      | _, _, Some max_boxes, _, _, _, _, _, _ ->
           parse (update_layout acc (fun l -> { l with max_boxes })) rest
-      | _, _, _, Some box_level ->
+      | _, _, _, Some box_level, _, _, _, _, _ ->
           parse (update_layout acc (fun l -> { l with box_level })) rest
+      | _, _, _, _, Some block_indent, _, _, _, _ ->
+          parse (update_layout acc (fun l -> { l with block_indent })) rest
+      | _, _, _, _, _, Some proof_indent, _, _, _ ->
+          parse (update_layout acc (fun l -> { l with proof_indent })) rest
+      | _, _, _, _, _, _, Some proof_margin, _, _ ->
+          parse (update_layout acc (fun l -> { l with proof_margin = Some proof_margin })) rest
+      | _, _, _, _, _, _, _, Some signature_break_indent, _ ->
+          parse (update_layout acc (fun l -> { l with signature_break_indent })) rest
+      | _, _, _, _, _, _, _, _, Some body_break_indent ->
+          parse (update_layout acc (fun l -> { l with body_break_indent })) rest
       | _ ->
           if String.length arg > 0 && arg.[0] = '-' then (
             Printf.eprintf "Unknown option: %s\n%!" arg;

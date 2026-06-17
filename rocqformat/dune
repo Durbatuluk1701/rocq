@@ -2,7 +2,8 @@
  (name rocqformat_lib)
  (public_name rocqformat.lib)
  (modules rocqformat_lib rocqformat_args rocqformat_layout)
- (libraries rocq-runtime.toplevel rocq-runtime.coqargs rocq-runtime.sysinit))
+ (libraries rocq-runtime.toplevel rocq-runtime.coqargs rocq-runtime.sysinit
+  rocq-runtime.printing))
 
 (executable
  (name main)

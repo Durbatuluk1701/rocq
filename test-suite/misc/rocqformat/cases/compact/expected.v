@@ -2,5 +2,6 @@ Inductive nat : Set :=
   | O : _
   | S : forall n : nat, _.
 
-Parameter (n : nat).
-Definition use_n : nat := n.
+Definition a : nat := O.
+
+Definition b : nat := O.
