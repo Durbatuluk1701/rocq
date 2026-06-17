@@ -767,10 +767,13 @@ let pr_extend s cl =
   with Not_found ->
     hov 1 (str "TODO(" ++ str s.ext_entry ++ spc () ++ prlist_with_sep sep pr_arg cl ++ str ")")
 
-let pr_def_assign_break _body_ind body doc =
+let pr_def_assign_break body_ind body doc =
   match body.CAst.v with
   | Constrexpr.CIf _ -> fnl () ++ doc
-  | _ -> spc () ++ doc
+  | Constrexpr.CLambdaN _ | CCases _ | CLetIn _ | CProdN _
+  | CFix _ | CCoFix _ | CLetTuple _ ->
+      spc () ++ doc
+  | _ -> brk (1, body_ind) ++ doc
 
 let pr_synpure_vernac_expr v =
   let return = tag_vernac v in
