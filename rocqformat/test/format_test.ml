@@ -2,35 +2,11 @@
 (* Integration tests: run the rocqformat executable on fixture files. *)
 
 open OUnit2
-open Unix
-
-let exe_name = "main.exe"
 
 let find_rocqformat () =
-  let root = Sys.getenv "PWD" in
-  let candidates =
-    [ Filename.concat root ("_build/default/rocqformat/" ^ exe_name)
-    ; Filename.concat root "_build/default/rocqformat/main.exe"
-    ; Filename.concat root
-        ("_build/install/default/libexec/rocqformat/" ^ exe_name)
-    ]
-  in
-  let rec try_candidates = function
-    | [] -> None
-    | path :: rest ->
-        if Sys.file_exists path then Some (Filename.quote path)
-        else try_candidates rest
-  in
-  match try_candidates candidates with
-  | Some path -> path
-  | None -> (
-      match Sys.getenv_opt "ROCQFORMAT" with
-      | Some path when Sys.file_exists path -> Filename.quote path
-      | _ -> failwith "rocqformat executable not found (set ROCQFORMAT or build first)")
+  Filename.quote Rocqformat_test_config.rocqformat_path
 
-let cases_root =
-  Filename.concat (Sys.getenv "PWD")
-    "test-suite/misc/rocqformat/cases"
+let cases_root = Rocqformat_test_config.cases_root
 
 let read_file path =
   let ic = open_in_bin path in

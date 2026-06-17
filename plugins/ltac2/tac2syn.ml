@@ -904,9 +904,11 @@ let lookup_notation_data scopes parsing =
   match List.find_map (fun sc -> Tac2Scope.Map.find_opt sc scope_map) scopes with
   | Some data -> data
   | None ->
-    match Tac2Scope.Map.bindings scope_map with
-    | (_, data) :: _ -> data
-    | [] -> CErrors.user_err Pp.(str "Unknown Ltac2 notation")
+    CErrors.user_err
+      Pp.(str "Unknown interpretation for Ltac2 notation in currently open scopes" ++ spc() ++
+          str "(notation available in scopes: " ++
+          pr_enum (fun (sc,_) -> ScopeTab.pr sc) (Tac2Scope.Map.bindings scope_map) ++
+          str ").")
 
 let is_nil_expr e =
   match e.CAst.v with
