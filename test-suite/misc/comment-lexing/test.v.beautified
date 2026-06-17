@@ -11,7 +11,7 @@ Definition coul_suiv : coulfeu -> coulfeu :=
   | Rouge => Vert
   end.
 
-Theorem th_crou_gen  : forall c : coulfeu, c = Rouge -> coul_suiv c = Vert.
+Theorem th_crou_gen : forall c : coulfeu, c = Rouge -> coul_suiv c = Vert.
 Proof.
   intro c0.
 

@@ -563,7 +563,7 @@ let pr_statement head (idpl,(bl,c)) =
   hov 2
     (head ++ spc() ++ pr_ident_decl idpl ++ spc() ++
      (match bl with [] -> mt() | _ -> pr_binders bl ++ spc()) ++
-     brk(0, sig_ind) ++ str " :" ++ brk(0, body_ind) ++ pr_spc_lconstr c)
+     brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_spc_lconstr c)
 
 let pr_rew_rule (ubinders, lhs, rhs) =
   let binders = match ubinders with None -> mt()
@@ -893,14 +893,14 @@ let pr_synpure_vernac_expr v =
         let ty = match d with
           | None -> mt()
           | Some ty ->
-            brk(0, sig_ind) ++ str " :" ++ brk(0, body_ind) ++ pr_spc_lconstr ty
+            brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_spc_lconstr ty
         in
         pr_binders_arg bl ++ ty ++ brk(0, body_ind) ++ str " :=" ++ spc() ++ pr_reduce red ++ pr_lconstr body
       | ProveBody (bl,t) ->
         let policy = !Format_policy.active in
         let sig_ind = policy.signature_break_indent in
         let body_ind = policy.body_break_indent in
-        let typ u = if isgoal then (assert (bl = []); u) else (brk(0, sig_ind) ++ str" :" ++ brk(0, body_ind) ++ u) in
+        let typ u = if isgoal then (assert (bl = []); u) else (brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ u) in
         pr_binders_arg bl ++ typ (pr_spc_lconstr t)
     in
     return (

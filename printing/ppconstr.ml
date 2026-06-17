@@ -760,11 +760,14 @@ let pr ~flags pr sep lev_after inherited a =
     let pr_branch lev_after = pr (fun () -> brk (1,1)) lev_after ltop in
     return (fun lev_after ->
         let if_multiline () =
-          hv 0 (
-            keyword "if" ++ spc () ++ pr mt no_after ltop c
-            ++ pr_simple_return_type (pr mt) na po
-            ++ fnl () ++ keyword "then" ++ spc () ++ pr_branch no_after b1
-            ++ fnl () ++ keyword "else" ++ spc () ++ pr_branch lev_after b2)
+          fnl ()
+          ++ v 0 (
+            hov 0 (keyword "if" ++ spc () ++ pr mt no_after ltop c
+                   ++ pr_simple_return_type (pr mt) na po)
+            ++ cut ()
+            ++ hov 0 (keyword "then" ++ spc () ++ pr mt no_after ltop b1)
+            ++ cut ()
+            ++ hov 0 (keyword "else" ++ spc () ++ pr mt lev_after ltop b2))
         in
         let if_inline () =
           hv 0 (
