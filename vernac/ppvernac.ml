@@ -770,8 +770,7 @@ let pr_extend s cl =
 let pr_def_assign_break body_ind body doc =
   match body.CAst.v with
   | Constrexpr.CIf _ -> fnl () ++ doc
-  | Constrexpr.CLambdaN _ | CCases _ | CLetIn _ | CProdN _
-  | CFix _ | CCoFix _ | CLetTuple _ ->
+  | Constrexpr.CLambdaN _ | CProdN _ | CLetIn _ | CFix _ | CCoFix _ | CLetTuple _ ->
       spc () ++ doc
   | _ -> brk (1, body_ind) ++ doc
 
