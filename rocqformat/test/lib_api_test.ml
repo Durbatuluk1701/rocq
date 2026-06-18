@@ -3,17 +3,17 @@
 
 open OUnit2
 
-let cases_root =
-  Filename.concat (Sys.getenv "PWD")
-    "test-suite/misc/rocqformat/cases/basic"
+let cases_root = Filename.concat Rocqformat_test_config.cases_root "basic"
 
 let read_file path =
   let ic = open_in_bin path in
-  let len = in_channel_length ic in
-  let buf = Bytes.create len in
-  really_input ic buf 0 len;
-  close_in ic;
-  Bytes.to_string buf
+  Fun.protect
+    ~finally:(fun () -> close_in ic)
+    (fun () ->
+      let len = in_channel_length ic in
+      let buf = Bytes.create len in
+      really_input ic buf 0 len;
+      Bytes.to_string buf)
 
 let test_init_idempotent _ctx =
   Rocqformat_lib.init ();

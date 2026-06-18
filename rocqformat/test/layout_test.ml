@@ -44,17 +44,18 @@ let test_preserve_header_spacing _ =
   assert_equal glue_expected (normalize_output ~layout:default glue_input)
 
 let test_default_layout _ =
-  assert_equal 2 default.block_indent;
-  assert_equal 2 default.proof_indent;
-  assert_equal true default.compact;
-  assert_equal 4 default.signature_break_indent;
-  assert_equal 2 default.body_break_indent;
-  assert_equal IfAuto default.if_layout;
+  let policy = default.policy in
+  assert_equal 2 policy.block_indent;
+  assert_equal 2 policy.proof_indent;
+  assert_equal true policy.compact;
+  assert_equal 4 policy.signature_break_indent;
+  assert_equal 2 policy.body_break_indent;
+  assert_equal Format_policy.IfAuto policy.if_layout;
   assert_equal HeaderPreserve default.header_style;
-  assert_equal NotationInline default.notation_style;
-  assert_equal InductiveAuto default.inductive_style;
-  assert_equal ModuleAuto default.module_style;
-  assert_equal CommentPreserve default.comment_style;
+  assert_equal Format_policy.NotationInline policy.notation_style;
+  assert_equal Format_policy.InductiveAuto policy.inductive_style;
+  assert_equal Format_policy.ModuleAuto policy.module_style;
+  assert_equal Format_policy.CommentPreserve policy.comment_style;
   assert_equal false default.project_auto;
   assert_equal 80 (proof_margin default)
 

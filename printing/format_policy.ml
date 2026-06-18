@@ -8,10 +8,6 @@ type if_layout =
   | IfInline
   | IfMultiline
 
-type header_style =
-  | HeaderPreserve
-  | HeaderCompact
-
 type notation_style =
   | NotationAuto
   | NotationInline
@@ -38,7 +34,6 @@ type t = {
   signature_break_indent : int;
   body_break_indent : int;
   if_layout : if_layout;
-  header_style : header_style;
   notation_style : notation_style;
   inductive_style : inductive_style;
   module_style : module_style;
@@ -53,7 +48,6 @@ let default = {
   signature_break_indent = 4;
   body_break_indent = 2;
   if_layout = IfAuto;
-  header_style = HeaderPreserve;
   notation_style = NotationAuto;
   inductive_style = InductiveAuto;
   module_style = ModuleAuto;
@@ -61,6 +55,20 @@ let default = {
 }
 
 let active = ref default
+
+let preserve_comments () =
+  match !active.comment_style with
+  | CommentPreserve -> true
+  | CommentAuto -> false
+
+let notation_inline () =
+  match !active.notation_style with
+  | NotationInline -> true
+  | NotationAuto -> false
+
+let module_style () = !active.module_style
+
+let inductive_style () = !active.inductive_style
 
 let indent_prefix n =
   if n <= 0 then mt () else str (String.make n ' ')

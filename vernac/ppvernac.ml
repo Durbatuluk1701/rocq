@@ -383,16 +383,14 @@ let is_simple_module_type = function
   | _ -> false
 
 let use_compact_module_layout binders =
-  let policy = !Format_policy.active in
-  match policy.module_style with
+  match Format_policy.module_style () with
   | Format_policy.ModuleCompact -> true
   | Format_policy.ModuleSpaced -> false
   | Format_policy.ModuleAuto ->
     List.for_all (fun (_, _, (mty, _)) -> is_simple_module_type mty) binders
 
 let use_compact_module_apply () =
-  let policy = !Format_policy.active in
-  match policy.module_style with
+  match Format_policy.module_style () with
   | Format_policy.ModuleCompact | Format_policy.ModuleAuto -> true
   | Format_policy.ModuleSpaced -> false
 
@@ -401,6 +399,10 @@ let pr_type_colon_signature pr_c c =
   let sig_ind = policy.signature_break_indent in
   let body_ind = policy.body_break_indent in
   brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_c c
+
+let pr_optional_type_colon_signature pr_c = function
+  | None -> mt ()
+  | Some ty -> pr_type_colon_signature pr_c ty
 
 let pr_assumption_params (c, (xl, t)) =
   let type_part =
@@ -574,10 +576,8 @@ let pr_syntax_modifiers = function
   | [] -> mt()
   | l ->
     let inner = str"(" ++ prlist_with_sep sep_v2 pr_syntax_modifier l ++ str")" in
-    let policy = !Format_policy.active in
-    match policy.notation_style with
-    | Format_policy.NotationInline -> spc() ++ hv 0 inner
-    | Format_policy.NotationAuto -> spc() ++ hov 1 inner
+    if Format_policy.notation_inline () then spc() ++ hv 0 inner
+    else spc() ++ hov 1 inner
 
 let pr_notation_declaration ntn_decl =
   let open Vernacexpr in
@@ -799,8 +799,7 @@ let is_simple_inductive_constructor (_, (_, c)) =
   | _ -> false
 
 let use_compact_inductive_layout constructors =
-  let policy = !Format_policy.active in
-  match policy.inductive_style with
+  match Format_policy.inductive_style () with
   | Format_policy.InductiveCompact -> true
   | Format_policy.InductiveVerbose -> false
   | Format_policy.InductiveAuto ->
@@ -954,21 +953,14 @@ let pr_synpure_vernac_expr v =
     let pr_def_body = match b with
       | DefineBody (bl,red,body,d) ->
         let policy = !Format_policy.active in
-        let sig_ind = policy.signature_break_indent in
         let body_ind = policy.body_break_indent in
-        let ty = match d with
-          | None -> mt()
-          | Some ty ->
-            brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_spc_lconstr ty
-        in
         let body_doc = pr_reduce red ++ pr_lconstr body in
-        pr_binders_arg bl ++ ty ++ brk(0, body_ind) ++ str " :="
+        pr_binders_arg bl
+        ++ pr_optional_type_colon_signature pr_spc_lconstr d
+        ++ brk(0, body_ind) ++ str " :="
         ++ pr_def_assign_break body_ind body body_doc
       | ProveBody (bl,t) ->
-        let policy = !Format_policy.active in
-        let sig_ind = policy.signature_break_indent in
-        let body_ind = policy.body_break_indent in
-        let typ u = if isgoal then (assert (bl = []); u) else (brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ u) in
+        let typ u = if isgoal then (assert (bl = []); u) else pr_type_colon_signature pr_spc_lconstr t in
         pr_binders_arg bl ++ typ (pr_spc_lconstr t)
     in
     return (
@@ -1460,15 +1452,12 @@ let pr_synterp_vernac_expr v =
       pr_notation_declaration ntn_decl))
     )
   | VernacReservedNotation (_, (s, l)) ->
-    let policy = !Format_policy.active in
     let doc =
       keyword "Reserved Notation" ++ spc() ++ pr_ast qs s ++
       pr_syntax_modifiers l
     in
     return (
-      match policy.notation_style with
-      | Format_policy.NotationInline -> hv 0 doc
-      | Format_policy.NotationAuto -> hov 0 doc)
+      if Format_policy.notation_inline () then hv 0 doc else hov 0 doc)
   | VernacDeclareCustomEntry s ->
     return (
       keyword "Declare Custom Entry " ++ Id.print s

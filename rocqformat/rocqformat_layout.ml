@@ -8,35 +8,12 @@
 (*         *     (see LICENSE file for the text of the license)         *)
 (************************************************************************)
 
-(** Layout policy for [rocqformat], mapping user-facing options to Rocq's
-    pretty-printing parameters. *)
+(** Layout configuration for [rocqformat]: formatter parameters, print policy,
+    and file-level output normalization. *)
 
-type if_layout = Format_policy.if_layout =
-  | IfAuto
-  | IfInline
-  | IfMultiline
-
-type header_style = Format_policy.header_style =
+type header_style =
   | HeaderPreserve
   | HeaderCompact
-
-type notation_style = Format_policy.notation_style =
-  | NotationAuto
-  | NotationInline
-
-type inductive_style = Format_policy.inductive_style =
-  | InductiveAuto
-  | InductiveCompact
-  | InductiveVerbose
-
-type module_style = Format_policy.module_style =
-  | ModuleAuto
-  | ModuleCompact
-  | ModuleSpaced
-
-type comment_style = Format_policy.comment_style =
-  | CommentAuto
-  | CommentPreserve
 
 type t = {
   margin : int;
@@ -45,21 +22,18 @@ type t = {
   box_level : int;
   extra_blank_line : bool;
   continue_on_error : bool;
-  block_indent : int;
-  proof_indent : int;
   proof_margin : int option;
-  compact : bool;
-  signature_break_indent : int;
-  body_break_indent : int;
-  if_layout : if_layout;
+  policy : Format_policy.t;
   header_style : header_style;
-  notation_style : notation_style;
-  inductive_style : inductive_style;
-  module_style : module_style;
-  comment_style : comment_style;
   project_file : string option;
   project_auto : bool;
 }
+
+let rocqformat_policy =
+  { Format_policy.default with
+    Format_policy.notation_style = Format_policy.NotationInline;
+    comment_style = Format_policy.CommentPreserve;
+  }
 
 let default = {
   margin = 80;
@@ -68,18 +42,9 @@ let default = {
   box_level = 0;
   extra_blank_line = true;
   continue_on_error = false;
-  block_indent = 2;
-  proof_indent = 2;
   proof_margin = None;
-  compact = true;
-  signature_break_indent = 4;
-  body_break_indent = 2;
-  if_layout = IfAuto;
+  policy = rocqformat_policy;
   header_style = HeaderPreserve;
-  notation_style = NotationInline;
-  inductive_style = InductiveAuto;
-  module_style = ModuleAuto;
-  comment_style = CommentPreserve;
   project_file = None;
   project_auto = false;
 }
@@ -89,6 +54,9 @@ let max_indent_of_margin margin =
 
 let proof_margin layout =
   Option.default layout.margin layout.proof_margin
+
+let update_policy layout f =
+  { layout with policy = f layout.policy }
 
 let apply_globals layout =
   Topfmt.set_margin (Some layout.margin);
@@ -102,64 +70,54 @@ let configure_formatter layout fmt =
   Format.pp_set_ellipsis_text fmt "..."
 
 let apply_format_policy layout =
-  let policy = {
-    Format_policy.block_indent = layout.block_indent;
-    proof_indent = layout.proof_indent;
-    proof_margin = proof_margin layout;
-    compact = layout.compact;
-    signature_break_indent = layout.signature_break_indent;
-    body_break_indent = layout.body_break_indent;
-    if_layout = layout.if_layout;
-    header_style = layout.header_style;
-    notation_style = layout.notation_style;
-    inductive_style = layout.inductive_style;
-    module_style = layout.module_style;
-    comment_style = layout.comment_style;
-  } in
+  let policy = { layout.policy with proof_margin = proof_margin layout } in
   Format_policy.active := policy;
-  Pp.preserve_comment_body :=
-    match layout.comment_style with
-    | CommentPreserve -> true
-    | CommentAuto -> false
-
-let preserve_header_spacing s =
-  let replace_substring ~from ~to_ s =
-    let len_from = String.length from in
-    let buf = Buffer.create (String.length s + 16) in
-    let rec loop i =
-      if i > String.length s - len_from then
-        Buffer.add_substring buf s i (String.length s - i)
-      else if String.equal (String.sub s i len_from) from then (
-        Buffer.add_string buf to_;
-        loop (i + len_from))
-      else (
-        Buffer.add_char buf s.[i];
-        loop (i + 1))
-    in
-    loop 0;
-    Buffer.contents buf
-  in
-  s
-  |> replace_substring ~from:")\n(** " ~to_:")\n\n(** "
-  |> replace_substring ~from:"*)(** " ~to_:"*)\n\n(** "
-  |> replace_substring ~from:")\n(* File" ~to_:")\n\n(* File"
+  Pp.preserve_comment_body := Format_policy.preserve_comments ()
 
 let to_vernac_layout layout : Vernac.format_layout =
-  { box_level = layout.box_level
-  ; extra_blank_line = layout.extra_blank_line
-  ; continue_on_error = layout.continue_on_error
-  ; block_indent = layout.block_indent
-  ; proof_indent = layout.proof_indent
-  ; proof_margin = proof_margin layout
-  ; compact = layout.compact
+  let policy = layout.policy in
+  { box_level = layout.box_level;
+    extra_blank_line = layout.extra_blank_line;
+    continue_on_error = layout.continue_on_error;
+    block_indent = policy.block_indent;
+    proof_indent = policy.proof_indent;
+    proof_margin = proof_margin layout;
+    compact = policy.compact;
   }
 
-(** Normalize formatted text: trim trailing whitespace, ensure a single
-    final newline, and collapse runs of more than two blank lines. *)
+(** Post-process formatted output to restore blank lines between glued comment
+    blocks. The vernacular driver does not yet track this spacing explicitly. *)
+let replace_all ~from ~to_ s =
+  let len_from = String.length from in
+  let buf = Buffer.create (String.length s + 16) in
+  let rec loop i =
+    if i > String.length s - len_from then
+      Buffer.add_substring buf s i (String.length s - i)
+    else if String.equal (String.sub s i len_from) from then (
+      Buffer.add_string buf to_;
+      loop (i + len_from))
+    else (
+      Buffer.add_char buf s.[i];
+      loop (i + 1))
+  in
+  loop 0;
+  Buffer.contents buf
+
+let preserve_header_spacing replacements s =
+  List.fold_left (fun s (from, to_) -> replace_all ~from ~to_ s) s replacements
+
+let header_spacing_replacements = [
+  (")\n(** ", ")\n\n(** ");
+  ("*)(** ", "*)\n\n(** ");
+  (")\n(* File", ")\n\n(* File");
+]
+
+(** Normalize formatted text: trim trailing whitespace, ensure a single final
+    newline, and collapse runs of more than two blank lines. *)
 let normalize_output ?(layout=default) s =
   let s =
     match layout.header_style with
-    | HeaderPreserve -> preserve_header_spacing s
+    | HeaderPreserve -> preserve_header_spacing header_spacing_replacements s
     | HeaderCompact -> s
   in
   let len = String.length s in

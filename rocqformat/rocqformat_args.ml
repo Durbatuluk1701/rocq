@@ -67,120 +67,113 @@ let parse_int ~opt s =
     Printf.eprintf "Invalid %s: %s\n%!" opt s;
     exit 1
 
-let parse_prefixed_int ~opt arg prefix =
-  if String.length arg > String.length prefix
-     && String.sub arg 0 (String.length prefix) = prefix
-  then Some (parse_int ~opt (String.sub arg (String.length prefix)
-                                (String.length arg - String.length prefix)))
-  else None
+let parse_enum ~flag values s =
+  try List.assoc s values
+  with Not_found ->
+    let expected = String.concat ", " (List.map fst values) in
+    Printf.eprintf "Invalid %s: %s (expected %s)\n%!" flag s expected;
+    exit 1
 
 let update_layout acc f = { acc with layout = f acc.layout }
 
-let parse_if_style = function
-  | "auto" -> Rocqformat_layout.IfAuto
-  | "inline" -> Rocqformat_layout.IfInline
-  | "multiline" -> Rocqformat_layout.IfMultiline
-  | s ->
-    Printf.eprintf "Invalid --if-style: %s (expected auto, inline, or multiline)\n%!" s;
-    exit 1
+let update_policy acc f =
+  update_layout acc (fun layout -> Rocqformat_layout.update_policy layout f)
 
-let parse_header_style = function
-  | "preserve" -> Rocqformat_layout.HeaderPreserve
-  | "compact" -> Rocqformat_layout.HeaderCompact
-  | s ->
-    Printf.eprintf "Invalid --header-style: %s (expected preserve or compact)\n%!" s;
-    exit 1
+let arg_value prefix arg =
+  let prefix_len = String.length prefix in
+  if String.length arg > prefix_len && String.sub arg 0 prefix_len = prefix then
+    Some (String.sub arg prefix_len (String.length arg - prefix_len))
+  else None
 
-let parse_notation_style = function
-  | "auto" -> Rocqformat_layout.NotationAuto
-  | "inline" -> Rocqformat_layout.NotationInline
-  | s ->
-    Printf.eprintf "Invalid --notation-style: %s (expected auto or inline)\n%!" s;
-    exit 1
+let parse_prefixed_int ~opt prefix arg =
+  match arg_value prefix arg with
+  | None -> None
+  | Some value -> Some (parse_int ~opt value)
 
-let parse_inductive_style = function
-  | "auto" -> Rocqformat_layout.InductiveAuto
-  | "compact" -> Rocqformat_layout.InductiveCompact
-  | "verbose" -> Rocqformat_layout.InductiveVerbose
-  | s ->
-    Printf.eprintf "Invalid --inductive-style: %s (expected auto, compact, or verbose)\n%!" s;
-    exit 1
+type int_option = {
+  prefix : string;
+  opt : string;
+  update : Rocqformat_layout.t -> int -> Rocqformat_layout.t;
+}
 
-let parse_module_style = function
-  | "auto" -> Rocqformat_layout.ModuleAuto
-  | "compact" -> Rocqformat_layout.ModuleCompact
-  | "spaced" -> Rocqformat_layout.ModuleSpaced
-  | s ->
-    Printf.eprintf "Invalid --module-style: %s (expected auto, compact, or spaced)\n%!" s;
-    exit 1
+let int_options = [
+  { prefix = "--margin="; opt = "margin";
+    update = (fun layout margin ->
+        { layout with margin; max_indent = Rocqformat_layout.max_indent_of_margin margin });
+  };
+  { prefix = "--indent="; opt = "indent";
+    update = (fun layout max_indent -> { layout with max_indent });
+  };
+  { prefix = "--depth="; opt = "depth";
+    update = (fun layout max_boxes -> { layout with max_boxes });
+  };
+  { prefix = "--box-level="; opt = "box-level";
+    update = (fun layout box_level -> { layout with box_level });
+  };
+  { prefix = "--block-indent="; opt = "block-indent";
+    update = (fun layout block_indent ->
+        Rocqformat_layout.update_policy layout (fun policy ->
+            { policy with block_indent }));
+  };
+  { prefix = "--proof-indent="; opt = "proof-indent";
+    update = (fun layout proof_indent ->
+        Rocqformat_layout.update_policy layout (fun policy ->
+            { policy with proof_indent }));
+  };
+  { prefix = "--proof-margin="; opt = "proof-margin";
+    update = (fun layout proof_margin ->
+        { layout with proof_margin = Some proof_margin });
+  };
+  { prefix = "--signature-break-indent="; opt = "signature-break-indent";
+    update = (fun layout n ->
+        Rocqformat_layout.update_policy layout (fun policy ->
+            { policy with signature_break_indent = n }));
+  };
+  { prefix = "--body-break-indent="; opt = "body-break-indent";
+    update = (fun layout n ->
+        Rocqformat_layout.update_policy layout (fun policy ->
+            { policy with body_break_indent = n }));
+  };
+]
 
-let parse_comment_style = function
-  | "auto" -> Rocqformat_layout.CommentAuto
-  | "preserve" -> Rocqformat_layout.CommentPreserve
-  | s ->
-    Printf.eprintf "Invalid --comment-style: %s (expected auto or preserve)\n%!" s;
-    exit 1
+let parse_if_style s =
+  parse_enum ~flag:"--if-style" [
+    "auto", Format_policy.IfAuto;
+    "inline", Format_policy.IfInline;
+    "multiline", Format_policy.IfMultiline;
+  ] s
 
-let project_file_names = ["_CoqProject"; "RocqProject"]
+let parse_header_style s =
+  parse_enum ~flag:"--header-style" [
+    "preserve", Rocqformat_layout.HeaderPreserve;
+    "compact", Rocqformat_layout.HeaderCompact;
+  ] s
 
-let discover_project_file files =
-  let search_from dir =
-    let rec find = function
-      | [] -> None
-      | name :: rest ->
-        match CoqProject_file.find_project_file ~from:dir ~projfile_name:name with
-        | Some _ as found -> found
-        | None -> find rest
-    in
-    find project_file_names
-  in
-  match files with
-  | [] -> search_from (Sys.getcwd ())
-  | file :: _ ->
-    let file = if Filename.is_relative file then Filename.concat (Sys.getcwd ()) file else file in
-    search_from (Filename.dirname file)
+let parse_notation_style s =
+  parse_enum ~flag:"--notation-style" [
+    "auto", Format_policy.NotationAuto;
+    "inline", Format_policy.NotationInline;
+  ] s
 
-let project_root project_file =
-  Filename.dirname project_file
+let parse_inductive_style s =
+  parse_enum ~flag:"--inductive-style" [
+    "auto", Format_policy.InductiveAuto;
+    "compact", Format_policy.InductiveCompact;
+    "verbose", Format_policy.InductiveVerbose;
+  ] s
 
-let scan_project_v_files dir =
-  let rec walk acc dir =
-    if not (Sys.file_exists dir) then acc
-    else
-      Array.fold_left (fun acc name ->
-          if name = "." || name = ".." then acc
-          else
-            let path = Filename.concat dir name in
-            if Sys.is_directory path then walk acc path
-            else if Filename.check_suffix name ".v" then path :: acc
-            else acc)
-        acc (Sys.readdir dir)
-  in
-  walk [] dir |> List.sort compare
+let parse_module_style s =
+  parse_enum ~flag:"--module-style" [
+    "auto", Format_policy.ModuleAuto;
+    "compact", Format_policy.ModuleCompact;
+    "spaced", Format_policy.ModuleSpaced;
+  ] s
 
-let list_project_v_files project_file =
-  let warning_fn msg = Printf.eprintf "Warning: %s\n%!" msg in
-  let project = CoqProject_file.read_project_file ~warning_fn project_file in
-  let root = project_root project_file in
-  let listed =
-    project
-    |> CoqProject_file.all_files
-    |> fun files -> CoqProject_file.files_by_suffix files [".v"]
-    |> List.map (fun f ->
-        let path = CoqProject_file.forget_source f in
-        if Filename.is_relative path then Filename.concat root path else path)
-  in
-  if listed <> [] then listed
-  else scan_project_v_files root
-
-let dedup_paths paths =
-  let rec loop acc = function
-    | [] -> List.rev acc
-    | p :: rest ->
-      if List.mem p acc then loop acc rest
-      else loop (p :: acc) rest
-  in
-  loop [] paths
+let parse_comment_style s =
+  parse_enum ~flag:"--comment-style" [
+    "auto", Format_policy.CommentAuto;
+    "preserve", Format_policy.CommentPreserve;
+  ] s
 
 let expand_project_files acc =
   if not acc.format_project then acc
@@ -191,43 +184,99 @@ let expand_project_files acc =
         "rocqformat: --format-project requires --project=FILE or --project-auto\n%!";
       exit 1
     | Some project_file ->
-      let project_files = list_project_v_files project_file in
-      { acc with files = dedup_paths (acc.files @ project_files) }
-
-let expand_project_args extras project_file =
-  let warning_fn msg = Printf.eprintf "Warning: %s\n%!" msg in
-  try
-    let project = CoqProject_file.read_project_file ~warning_fn project_file in
-    CoqProject_file.coqtop_args_from_project project @ extras
-  with
-  | CoqProject_file.Parsing_error msg ->
-    Printf.eprintf "rocqformat: invalid project file %s: %s\n%!" project_file msg;
-    exit 1
-  | CoqProject_file.UnableToOpenProjectFile msg ->
-    Printf.eprintf "rocqformat: cannot open project file %s: %s\n%!" project_file msg;
-    exit 1
-
-let apply_project_opts opts project_file =
-  let args = expand_project_args [] project_file in
-  fst (Coqargs.parse_args ~init:opts args)
+      let project_files = Rocqformat_project.list_project_v_files project_file in
+      { acc with files = Rocqformat_util.dedup_paths (acc.files @ project_files) }
 
 let finalize_parsing acc extras =
   let acc =
     match acc.layout.project_file with
     | Some _ -> acc
     | None when acc.layout.project_auto || acc.format_project ->
-      (match discover_project_file acc.files with
+      (match Rocqformat_project.discover_project_file acc.files with
        | None -> acc
-       | Some file -> update_layout acc (fun l -> { l with project_file = Some file }))
+       | Some file ->
+         update_layout acc (fun layout -> { layout with project_file = Some file }))
     | None -> acc
   in
   let acc = expand_project_files acc in
   let acc =
     if acc.format_project && not acc.layout.continue_on_error then
-      update_layout acc (fun l -> { l with continue_on_error = true })
+      update_layout acc (fun layout -> { layout with continue_on_error = true })
     else acc
   in
   acc, extras
+
+let parse_int_option acc arg =
+  List.find_map
+    (fun spec ->
+       match parse_prefixed_int ~opt:spec.opt spec.prefix arg with
+       | None -> None
+       | Some value -> Some (spec.update acc value))
+    int_options
+
+let try_parse_if_style arg acc =
+  match arg_value "--if-style=" arg with
+  | None -> None
+  | Some value ->
+    let if_layout = parse_if_style value in
+    Some (update_policy acc (fun policy -> { policy with if_layout }))
+
+let try_parse_header_style arg acc =
+  match arg_value "--header-style=" arg with
+  | None -> None
+  | Some value ->
+    let header_style = parse_header_style value in
+    Some (update_layout acc (fun layout -> { layout with header_style }))
+
+let try_parse_notation_style arg acc =
+  match arg_value "--notation-style=" arg with
+  | None -> None
+  | Some value ->
+    let notation_style = parse_notation_style value in
+    Some (update_policy acc (fun policy -> { policy with notation_style }))
+
+let try_parse_inductive_style arg acc =
+  match arg_value "--inductive-style=" arg with
+  | None -> None
+  | Some value ->
+    let inductive_style = parse_inductive_style value in
+    Some (update_policy acc (fun policy -> { policy with inductive_style }))
+
+let try_parse_module_style arg acc =
+  match arg_value "--module-style=" arg with
+  | None -> None
+  | Some value ->
+    let module_style = parse_module_style value in
+    Some (update_policy acc (fun policy -> { policy with module_style }))
+
+let try_parse_comment_style arg acc =
+  match arg_value "--comment-style=" arg with
+  | None -> None
+  | Some value ->
+    let comment_style = parse_comment_style value in
+    Some (update_policy acc (fun policy -> { policy with comment_style }))
+
+let style_parsers = [
+  try_parse_if_style;
+  try_parse_header_style;
+  try_parse_notation_style;
+  try_parse_inductive_style;
+  try_parse_module_style;
+  try_parse_comment_style;
+]
+
+let parse_style_arg acc arg =
+  List.find_map (fun parse -> parse arg acc) style_parsers
+
+let parse_project_or_file acc arg =
+  match arg_value "--project=" arg with
+  | Some file ->
+    update_layout acc (fun layout -> { layout with project_file = Some file })
+  | None ->
+    if String.length arg > 0 && arg.[0] = '-' then (
+      Printf.eprintf "Unknown option: %s\n%!" arg;
+      exit 1)
+    else { acc with files = acc.files @ [arg] }
 
 let rec parse acc = function
   | "-help" :: _ | "--help" :: _ ->
@@ -236,77 +285,25 @@ let rec parse acc = function
   | "-i" :: rest | "--in-place" :: rest -> parse { acc with in_place = true } rest
   | "--check" :: rest -> parse { acc with check_only = true } rest
   | "--continue-on-error" :: rest ->
-      parse (update_layout acc (fun l -> { l with continue_on_error = true })) rest
+      parse (update_layout acc (fun layout -> { layout with continue_on_error = true })) rest
   | "-o" :: file :: rest -> parse { acc with output = Some file } rest
   | "--output" :: file :: rest | "-output" :: file :: rest ->
       parse { acc with output = Some file } rest
   | "--no-extra-blank-lines" :: rest ->
-      parse (update_layout acc (fun l -> { l with extra_blank_line = false })) rest
+      parse (update_layout acc (fun layout -> { layout with extra_blank_line = false })) rest
   | "--no-compact" :: rest ->
-      parse (update_layout acc (fun l -> { l with compact = false })) rest
+      parse (update_policy acc (fun policy -> { policy with compact = false })) rest
   | "--project-auto" :: rest ->
-      parse (update_layout acc (fun l -> { l with project_auto = true })) rest
+      parse (update_layout acc (fun layout -> { layout with project_auto = true })) rest
   | "--format-project" :: rest ->
       parse { acc with format_project = true } rest
-  | arg :: rest when String.length arg > 11 && String.sub arg 0 11 = "--if-style=" ->
-      let style = parse_if_style (String.sub arg 11 (String.length arg - 11)) in
-      parse (update_layout acc (fun l -> { l with if_layout = style })) rest
-  | arg :: rest when String.length arg > 15 && String.sub arg 0 15 = "--header-style=" ->
-      let style = parse_header_style (String.sub arg 15 (String.length arg - 15)) in
-      parse (update_layout acc (fun l -> { l with header_style = style })) rest
-  | arg :: rest when String.length arg > 17 && String.sub arg 0 17 = "--notation-style=" ->
-      let style = parse_notation_style (String.sub arg 17 (String.length arg - 17)) in
-      parse (update_layout acc (fun l -> { l with notation_style = style })) rest
-  | arg :: rest when String.length arg > 18 && String.sub arg 0 18 = "--inductive-style=" ->
-      let style = parse_inductive_style (String.sub arg 18 (String.length arg - 18)) in
-      parse (update_layout acc (fun l -> { l with inductive_style = style })) rest
-  | arg :: rest when String.length arg > 15 && String.sub arg 0 15 = "--module-style=" ->
-      let style = parse_module_style (String.sub arg 15 (String.length arg - 15)) in
-      parse (update_layout acc (fun l -> { l with module_style = style })) rest
-  | arg :: rest when String.length arg > 16 && String.sub arg 0 16 = "--comment-style=" ->
-      let style = parse_comment_style (String.sub arg 16 (String.length arg - 16)) in
-      parse (update_layout acc (fun l -> { l with comment_style = style })) rest
-  | arg :: rest when String.length arg > 10 && String.sub arg 0 10 = "--project=" ->
-      let file = String.sub arg 10 (String.length arg - 10) in
-      parse (update_layout acc (fun l -> { l with project_file = Some file })) rest
-  | arg :: rest ->
-      begin match
-        parse_prefixed_int ~opt:"margin" arg "--margin=",
-        parse_prefixed_int ~opt:"indent" arg "--indent=",
-        parse_prefixed_int ~opt:"depth" arg "--depth=",
-        parse_prefixed_int ~opt:"box-level" arg "--box-level=",
-        parse_prefixed_int ~opt:"block-indent" arg "--block-indent=",
-        parse_prefixed_int ~opt:"proof-indent" arg "--proof-indent=",
-        parse_prefixed_int ~opt:"proof-margin" arg "--proof-margin=",
-        parse_prefixed_int ~opt:"signature-break-indent" arg "--signature-break-indent=",
-        parse_prefixed_int ~opt:"body-break-indent" arg "--body-break-indent="
-      with
-      | Some margin, _, _, _, _, _, _, _, _ ->
-          parse (update_layout acc (fun l ->
-              { l with margin; max_indent = Rocqformat_layout.max_indent_of_margin margin }))
-            rest
-      | _, Some max_indent, _, _, _, _, _, _, _ ->
-          parse (update_layout acc (fun l -> { l with max_indent })) rest
-      | _, _, Some max_boxes, _, _, _, _, _, _ ->
-          parse (update_layout acc (fun l -> { l with max_boxes })) rest
-      | _, _, _, Some box_level, _, _, _, _, _ ->
-          parse (update_layout acc (fun l -> { l with box_level })) rest
-      | _, _, _, _, Some block_indent, _, _, _, _ ->
-          parse (update_layout acc (fun l -> { l with block_indent })) rest
-      | _, _, _, _, _, Some proof_indent, _, _, _ ->
-          parse (update_layout acc (fun l -> { l with proof_indent })) rest
-      | _, _, _, _, _, _, Some proof_margin, _, _ ->
-          parse (update_layout acc (fun l -> { l with proof_margin = Some proof_margin })) rest
-      | _, _, _, _, _, _, _, Some signature_break_indent, _ ->
-          parse (update_layout acc (fun l -> { l with signature_break_indent })) rest
-      | _, _, _, _, _, _, _, _, Some body_break_indent ->
-          parse (update_layout acc (fun l -> { l with body_break_indent })) rest
-      | _ ->
-          if String.length arg > 0 && arg.[0] = '-' then (
-            Printf.eprintf "Unknown option: %s\n%!" arg;
-            exit 1)
-          else parse { acc with files = acc.files @ [arg] } rest
-      end
+  | arg :: rest -> (
+    match parse_int_option acc.layout arg with
+    | Some layout -> parse { acc with layout } rest
+    | None -> (
+      match parse_style_arg acc arg with
+      | Some acc -> parse acc rest
+      | None -> parse (parse_project_or_file acc arg) rest))
   | rest -> finalize_parsing acc rest
 
 let parse extras =
@@ -326,3 +323,5 @@ let validate t =
   if t.in_place && t.output <> None then (
     Printf.eprintf "rocqformat: -i and -o are incompatible\n%!";
     exit 1)
+
+let apply_project_opts = Rocqformat_project.apply_project_opts

@@ -6,10 +6,6 @@ type if_layout =
   | IfInline
   | IfMultiline
 
-type header_style =
-  | HeaderPreserve
-  | HeaderCompact
-
 type notation_style =
   | NotationAuto
   | NotationInline
@@ -36,7 +32,6 @@ type t = {
   signature_break_indent : int;
   body_break_indent : int;
   if_layout : if_layout;
-  header_style : header_style;
   notation_style : notation_style;
   inductive_style : inductive_style;
   module_style : module_style;
@@ -47,6 +42,11 @@ val default : t
 
 (** Active policy for the current formatting session. *)
 val active : t ref
+
+val preserve_comments : unit -> bool
+val notation_inline : unit -> bool
+val module_style : unit -> module_style
+val inductive_style : unit -> inductive_style
 
 (** [indent_prefix n] returns a document prefix of [n] spaces. *)
 val indent_prefix : int -> Pp.t

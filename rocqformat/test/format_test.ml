@@ -24,15 +24,17 @@ let cases_root =
 
 let read_file path =
   let ic = open_in_bin path in
-  let len = in_channel_length ic in
-  let buf = Bytes.create len in
-  really_input ic buf 0 len;
-  close_in ic;
-  Bytes.to_string buf
+  Fun.protect
+    ~finally:(fun () -> close_in ic)
+    (fun () ->
+      let len = in_channel_length ic in
+      let buf = Bytes.create len in
+      really_input ic buf 0 len;
+      Bytes.to_string buf)
 
 let run_rocqformat rocqformat extra_args input =
   let cmd =
-    Printf.sprintf "%s -q -boot -noinit %s %s 2>/dev/null" rocqformat extra_args
+    Printf.sprintf "%s -q -boot -noinit %s %s" rocqformat extra_args
       (Filename.quote input)
   in
   let ic = Unix.open_process_in cmd in
@@ -42,8 +44,15 @@ let run_rocqformat rocqformat extra_args input =
        Buffer.add_char buf (input_char ic)
      done
    with End_of_file -> ());
-  ignore (Unix.close_process_in ic);
-  Buffer.contents buf
+  let status = Unix.close_process_in ic in
+  match status with
+  | WEXITED 0 -> Buffer.contents buf
+  | WEXITED code ->
+    failwith (Printf.sprintf "rocqformat exited with code %d" code)
+  | WSIGNALED signal ->
+    failwith (Printf.sprintf "rocqformat killed by signal %d" signal)
+  | WSTOPPED signal ->
+    failwith (Printf.sprintf "rocqformat stopped by signal %d" signal)
 
 let list_case_dirs () =
   if not (Sys.file_exists cases_root) then []
