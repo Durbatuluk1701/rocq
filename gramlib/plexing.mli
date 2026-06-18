@@ -23,6 +23,7 @@ module type S = sig
 
   val tok_match : 'c pattern -> te -> 'c option
   val tok_text : 'c pattern -> string
+  val lex_trailing_on_current_line : Loc.t -> (unit, char) Stream.t -> Loc.t
 
   (* State for the comments, at some point we should make it functional *)
   module State : sig

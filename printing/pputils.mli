@@ -30,3 +30,4 @@ val pr_glb_generic : Environ.env -> Evd.evar_map -> ?level:Constrexpr.entry_rela
    structure. *)
 val beautify_comments : ((int * int) * string) list ref
 val extract_comments : int -> string list
+val extract_trailing_comments : int -> ((int * int) * string) list

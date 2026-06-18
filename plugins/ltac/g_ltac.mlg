@@ -457,7 +457,7 @@ let pr_tacdef_body env sigma tacdef_body =
   id ++
     prlist (function Name.Anonymous -> str " _"
       | Name.Name id -> spc () ++ Id.print id) idl
-  ++ (if redef then str" ::=" else str" :=") ++ brk(1,1)
+  ++ (if redef then str" ::=" else str" :=") ++ spc()
   ++ Pptactic.pr_raw_tactic env sigma body
 
 }

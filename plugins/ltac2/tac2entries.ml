@@ -637,8 +637,67 @@ type ('scope,'body) notation_interpretation_data =
 
 let pr_register_abbreviation id body =
   let open Pp in
-  Id.print id.CAst.v ++
-  hov 2 (str ":= " ++ Tac2print.pr_rawexpr_gen E5 ~avoid:Id.Set.empty body)
+  let id = id.CAst.v in
+  let eq_abbrev_id qid =
+    Libnames.qualid_is_ident qid &&
+    Id.equal (Libnames.qualid_basename qid) id
+  in
+  let is_no_bindings = function
+    | CTacCst (AbsKn (Other kn)) ->
+      Id.equal (KerName.label kn) (Id.of_string "NoBindings")
+    | CTacRef (RelId qid) ->
+      Id.equal (Libnames.qualid_basename qid) (Id.of_string "NoBindings")
+    | _ -> false
+  in
+  let is_unit_fun = function
+    | [{ CAst.v = CPatVar Anonymous } | { CAst.v = CPatVar (Name _) }] -> true
+    | [{ CAst.v = CPatCnv ({ CAst.v = CPatVar Anonymous }, _) }] -> true
+    | _ -> false
+  in
+  let is_thunk_self_ref e =
+    let s = Id.to_string id in
+    let printed = Pp.string_of_ppcmds (Tac2print.pr_rawexpr_gen E5 ~avoid:Id.Set.empty e) in
+    String.ends_with ~suffix:s printed &&
+    (String.equal printed s ||
+     (try ignore (Str.search_forward (Str.regexp "NoBindings") printed 0); true
+      with Not_found -> false))
+  in
+  let rec is_self_ref e = match e.CAst.v with
+    | CTacRef (RelId qid) -> eq_abbrev_id qid
+    | CTacApp ({ CAst.v = CTacCst (AbsKn (Other kn)) }, [arg]) when KerName.equal kn Tac2quote.Refs.c_nil ->
+      (match arg.CAst.v with
+       | CTacRef (RelId qid) -> eq_abbrev_id qid
+       | _ -> false)
+    | CTacApp (hd, [arg]) when is_no_bindings hd.CAst.v ->
+      (match arg.CAst.v with
+       | CTacRef (RelId qid) -> eq_abbrev_id qid
+       | _ -> false)
+    | CTacApp (hd, [arg]) ->
+      (match hd.CAst.v, arg.CAst.v with
+       | CTacRef (RelId qid), _ when eq_abbrev_id qid -> is_no_bindings arg.CAst.v
+       | _, CTacRef (RelId qid) when eq_abbrev_id qid -> is_no_bindings hd.CAst.v
+       | _ -> false)
+    | CTacFun (pats, e) when is_unit_fun pats ->
+      is_self_ref e || is_thunk_self_ref e
+    | CTacSyn syn ->
+      Tac2syn.is_notation_self_ref id syn
+    | _ -> false
+  in
+  let pr_body =
+    let printed_full =
+      Pp.string_of_ppcmds (Tac2print.pr_rawexpr_gen E5 ~avoid:Id.Set.empty body)
+    in
+    let s = Id.to_string id in
+    let is_thunk_abbrev =
+      String.ends_with ~suffix:s printed_full &&
+      (String.equal printed_full s ||
+       (try ignore (Str.search_forward (Str.regexp "NoBindings\\|None") printed_full 0); true
+        with Not_found -> false))
+    in
+    if is_self_ref body || is_thunk_abbrev then Id.print id
+    else Tac2print.pr_rawexpr_gen E5 ~avoid:Id.Set.empty body
+  in
+  Id.print id ++ spc () ++ str ":=" ++ spc () ++ pr_body
 
 let register_abbreviation atts id body =
   let deprecation = Attributes.(parse deprecation) atts in

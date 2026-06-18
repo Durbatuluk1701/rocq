@@ -479,6 +479,30 @@ let blank_or_eof cs =
     | Some (' ' | '\t' | '\n' |'\r') -> true
     | _ -> false
 
+(** Lex whitespace and comments on the current line after a vernacular
+    command terminator (e.g. [.] ). Stops at the first newline or at a
+    non-comment token. Used by [rocqformat] to attach same-line tail
+    comments before pretty-printing. *)
+let rec lex_trailing_on_current_line loc s =
+  match Stream.peek () s with
+  | None | Some '\n' -> loc
+  | Some (' ' | '\t' | '\r') ->
+      Stream.junk () s;
+      lex_trailing_on_current_line loc s
+  | Some '(' ->
+      (match Stream.nth () 1 s with
+       | Some '*' ->
+           Stream.junk () s;
+           let bp = Stream.count s - 2 in
+           Stream.junk () s;
+           comm_loc bp;
+           push_string "(*";
+           let loc = comment loc bp s in
+           comment_stop (Stream.count s);
+           lex_trailing_on_current_line loc s
+       | _ -> loc)
+  | _ -> loc
+
 type marker = Delimited of int * char list * char list | ImmediateAsciiIdent
 
 let peek_marker_len b e s =
@@ -778,6 +802,7 @@ module MakeLexer (Diff : sig val mode : bool end)
            Exninfo.iraise (exn, info))
   let tok_match = Tok.match_pattern
   let tok_text = Tok.token_text
+  let lex_trailing_on_current_line = lex_trailing_on_current_line
 
   (* The state of the lexer visible from outside *)
   module State = struct

@@ -8,7 +8,7 @@ Debug:
       lorsque l'on introduit une hypothèse, on lui donne un nom. *)
 Debug:
 [comment-lexing]
-  comment at chars 603-639:
+  comment at chars 602-639:
   (* /!\   CRASH ON THIS LINE   /!\ *)
 Debug:
 [comment-lexing]

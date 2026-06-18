@@ -20,8 +20,18 @@ and vernac_flag_value =
   | VernacFlagLeaf of vernac_flag_type
   | VernacFlagList of vernac_flags
 
+let escape_quotes s =
+  let len = String.length s in
+  let buf = Buffer.create len in
+  for i = 0 to len - 1 do
+    let ch = String.get s i in
+    Buffer.add_char buf ch;
+    if ch = '"' then Buffer.add_char buf '"'
+  done;
+  Buffer.contents buf
+
 let pr_vernac_flag_leaf = function
-  | FlagString s -> Pp.(quote (str s))
+  | FlagString s -> Pp.(str "\"" ++ str (escape_quotes s) ++ str "\"")
   | FlagQualid p -> Libnames.pr_qualid p
 
 let rec pr_vernac_flag_value = let open Pp in function

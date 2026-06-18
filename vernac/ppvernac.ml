@@ -221,9 +221,13 @@ let pr_abbreviation pr (ids, c) =
   pr c ++ spc () ++ prlist_with_sep spc pr_id ids
 
 let pr_at_level = function
-  | NumLevel n -> spc () ++ keyword "at" ++ spc () ++ keyword "level" ++ spc () ++ int n
-  | NextLevel -> spc () ++ keyword "at" ++ spc () ++ keyword "next" ++ spc () ++ keyword "level"
+  | NumLevel n -> keyword "at" ++ spc () ++ keyword "level" ++ spc () ++ int n
+  | NextLevel -> keyword "at" ++ spc () ++ keyword "next" ++ spc () ++ keyword "level"
   | DefaultLevel -> mt ()
+
+let pr_level_suffix pr lev =
+  let doc = pr lev in
+  if ismt doc then doc else spc () ++ doc
 
 let level_of_pattern_level = function None -> DefaultLevel | Some n -> NumLevel n
 
@@ -239,14 +243,14 @@ let pr_set_entry_type prcustom pr = function
   | ETIdent -> str"ident"
   | ETName -> str"name"
   | ETGlobal -> str"global"
-  | ETPattern (b,n) -> pr_strict b ++ str"pattern" ++ pr_at_level (level_of_pattern_level n)
+  | ETPattern (b,n) -> pr_strict b ++ str"pattern" ++ pr_level_suffix pr_at_level (level_of_pattern_level n)
   | ETConstr (s,bko,lev) -> pr_notation_entry prcustom s ++ pr lev ++ pr_opt pr_constr_as_binder_kind bko
   | ETBigint -> str "bigint"
   | ETBinder true -> str "binder"
   | ETBinder false -> str "closed binder"
 
 let pr_set_simple_entry_type =
-  pr_set_entry_type pr_qualid pr_at_level
+  pr_set_entry_type pr_qualid (fun lev -> pr_level_suffix pr_at_level lev)
 
 let pr_comment pr_c = function
   | CommentConstr c -> pr_c c
@@ -374,6 +378,40 @@ let pr_with_declaration pr_c = function
     keyword "Module" ++ spc() ++ pr_lfqid id ++ str" := " ++
     pr_qualid qid
 
+let is_simple_module_type = function
+  | { v = CMident _ } -> true
+  | _ -> false
+
+let use_compact_module_layout binders =
+  match Format_policy.module_style () with
+  | Format_policy.ModuleCompact -> true
+  | Format_policy.ModuleSpaced -> false
+  | Format_policy.ModuleAuto ->
+    List.for_all (fun (_, _, (mty, _)) -> is_simple_module_type mty) binders
+
+let use_compact_module_apply () =
+  match Format_policy.module_style () with
+  | Format_policy.ModuleCompact | Format_policy.ModuleAuto -> true
+  | Format_policy.ModuleSpaced -> false
+
+let pr_type_colon_signature pr_c c =
+  let policy = !Format_policy.active in
+  let sig_ind = policy.signature_break_indent in
+  let body_ind = policy.body_break_indent in
+  brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_c c
+
+let pr_optional_type_colon_signature pr_c = function
+  | None -> mt ()
+  | Some ty -> pr_type_colon_signature pr_c ty
+
+let pr_assumption_params (c, (xl, t)) =
+  let type_part =
+    match c with
+    | AddCoercion -> str ":>" ++ spc () ++ pr_lconstr_expr t
+    | NoCoercion -> pr_type_colon_signature pr_spc_lconstr t
+  in
+  hov 2 (prlist_with_sep sep pr_ident_decl xl ++ type_part)
+
 let rec pr_module_ast leading_space pr_c = function
   | { loc ; v = CMident qid } ->
     if leading_space then
@@ -385,7 +423,8 @@ let rec pr_module_ast leading_space pr_c = function
     let p = pr_with_declaration pr_c decl in
     m ++ spc() ++ keyword "with" ++ spc() ++ p
   | { v = CMapply (me1, me2 ) } ->
-    pr_module_ast leading_space pr_c me1 ++ spc() ++ pr_located pr_qualid (me2.loc, me2)
+    let sep = if use_compact_module_apply () then mt () else spc () in
+    pr_module_ast leading_space pr_c me1 ++ sep ++ pr_located pr_qualid (me2.loc, me2)
 
 let pr_inline = function
   | DefaultInline -> mt ()
@@ -401,9 +440,9 @@ let pr_module_ast_inl leading_space pr_c (mast,inl) =
   pr_module_ast leading_space pr_c mast ++ pr_inline inl
 
 let pr_of_module_type prc = function
-  | Enforce mty -> str ":" ++ pr_module_ast_inl true prc mty
+  | Enforce mty -> spc () ++ str ":" ++ pr_module_ast_inl true prc mty
   | Check mtys ->
-    prlist_strict (fun m -> str "<:" ++ pr_module_ast_inl true prc m) mtys
+    prlist_strict (fun m -> spc () ++ str "<:" ++ pr_module_ast_inl true prc m) mtys
 
 let pr_export_flag = function
   | Export -> keyword "Export"
@@ -417,14 +456,18 @@ let pr_require_token = function
     pr_export_with_cats export ++ spc ()
   | None -> mt()
 
-let pr_module_vardecls pr_c (export,idl,(mty,inl)) =
-  let m = pr_module_ast true pr_c mty in
-  spc() ++
-  hov 1 (str"(" ++ pr_require_token export ++
-         prlist_with_sep spc pr_lident idl ++ str":" ++ m ++ str")")
+let pr_module_vardecls pr_c compact (export,idl,(mty,inl)) =
+  let m = pr_module_ast (not compact) pr_c mty in
+  let body =
+    pr_require_token export ++
+    prlist_with_sep spc pr_lident idl ++ str ":" ++ m
+  in
+  if compact then str "(" ++ body ++ str ")"
+  else spc() ++ hov 1 (str "(" ++ body ++ str ")")
 
 let pr_module_binders l pr_c =
-  prlist_strict (pr_module_vardecls pr_c) l
+  let compact = use_compact_module_layout l in
+  prlist_strict (pr_module_vardecls pr_c compact) l
 
 let pr_type_option pr_c = function
   | { v = CHole (Some GNamedHole _) } as c -> brk(0,2) ++ str" :" ++ pr_c c
@@ -519,7 +562,7 @@ let pr_syntax_modifier = let open Gramlib.Gramext in CAst.with_val (function
     | SetItemScope (l,s) ->
       prlist_with_sep sep_v2 str l ++ spc () ++ str"in scope" ++ str s
     | SetLevel n -> pr_at_level (NumLevel n)
-    | SetCustomEntry (s,n) -> keyword "in" ++ spc() ++ keyword "custom" ++ spc() ++ pr_qualid s ++ (match n with None -> mt () | Some n -> pr_at_level (NumLevel n))
+    | SetCustomEntry (s,n) -> keyword "in" ++ spc() ++ keyword "custom" ++ spc() ++ pr_qualid s ++ (match n with None -> mt () | Some n -> spc () ++ pr_at_level (NumLevel n))
     | SetAssoc BothA -> assert false
     | SetAssoc LeftA -> keyword "left associativity"
     | SetAssoc RightA -> keyword "right associativity"
@@ -531,8 +574,10 @@ let pr_syntax_modifier = let open Gramlib.Gramext in CAst.with_val (function
 
 let pr_syntax_modifiers = function
   | [] -> mt()
-  | l -> spc() ++
-         hov 1 (str"(" ++ prlist_with_sep sep_v2 pr_syntax_modifier l ++ str")")
+  | l ->
+    let inner = str"(" ++ prlist_with_sep sep_v2 pr_syntax_modifier l ++ str")" in
+    if Format_policy.notation_inline () then spc() ++ hv 0 inner
+    else spc() ++ hov 1 inner
 
 let pr_notation_declaration ntn_decl =
   let open Vernacexpr in
@@ -558,9 +603,9 @@ let pr_rec_definition (rec_order, { fname; univs; binders; rtype; body_def; nota
 
 let pr_statement head (idpl,(bl,c)) =
   hov 2
-    (head ++ spc() ++ pr_ident_decl idpl ++ spc() ++
-     (match bl with [] -> mt() | _ -> pr_binders bl ++ spc()) ++
-     str":" ++ pr_spc_lconstr c)
+    (head ++ spc() ++ pr_ident_decl idpl ++
+     (match bl with [] -> mt() | _ -> spc() ++ pr_binders bl) ++
+     pr_type_colon_signature pr_spc_lconstr c)
 
 let pr_rew_rule (ubinders, lhs, rhs) =
   let binders = match ubinders with None -> mt()
@@ -748,6 +793,18 @@ let pr_using e =
     | SsFwdClose e -> "("^aux e^")*"
   in Pp.str (aux e)
 
+let is_simple_inductive_constructor (_, (_, c)) =
+  match c.CAst.v with
+  | Constrexpr.CHole _ -> true
+  | _ -> false
+
+let use_compact_inductive_layout constructors =
+  match Format_policy.inductive_style () with
+  | Format_policy.InductiveCompact -> true
+  | Format_policy.InductiveVerbose -> false
+  | Format_policy.InductiveAuto ->
+    List.for_all is_simple_inductive_constructor constructors
+
 let pr_extend s cl =
   let pr_arg a =
     try pr_gen a
@@ -760,9 +817,20 @@ let pr_extend s cl =
       | Egramml.GramTerminal s :: rl, cl -> str s :: aux rl cl
       | [], [] -> []
       | _ -> assert false in
-    hov 1 (pr_sequence identity (aux rl cl))
+    let doc = pr_sequence identity (aux rl cl) in
+    if String.equal s.ext_entry "VernacDeclareTacticDefinition" then
+      hv 0 doc
+    else
+      hov 0 doc
   with Not_found ->
     hov 1 (str "TODO(" ++ str s.ext_entry ++ spc () ++ prlist_with_sep sep pr_arg cl ++ str ")")
+
+let pr_def_assign_break body_ind body doc =
+  match body.CAst.v with
+  | Constrexpr.CIf _ -> fnl () ++ doc
+  | Constrexpr.CLambdaN _ | CProdN _ | CLetIn _ | CFix _ | CCoFix _ | CLetTuple _ ->
+      spc () ++ doc
+  | _ -> brk (1, body_ind) ++ doc
 
 let pr_synpure_vernac_expr v =
   let return = tag_vernac v in
@@ -884,13 +952,15 @@ let pr_synpure_vernac_expr v =
     in
     let pr_def_body = match b with
       | DefineBody (bl,red,body,d) ->
-        let ty = match d with
-          | None -> mt()
-          | Some ty -> spc() ++ str":" ++ pr_spc_lconstr ty
-        in
-        pr_binders_arg bl  ++ ty ++ str " :=" ++ spc() ++ pr_reduce red ++ pr_lconstr body
+        let policy = !Format_policy.active in
+        let body_ind = policy.body_break_indent in
+        let body_doc = pr_reduce red ++ pr_lconstr body in
+        pr_binders_arg bl
+        ++ pr_optional_type_colon_signature pr_spc_lconstr d
+        ++ brk(0, body_ind) ++ str " :="
+        ++ pr_def_assign_break body_ind body body_doc
       | ProveBody (bl,t) ->
-        let typ u = if isgoal then (assert (bl = []); u) else (str" :" ++ u) in
+        let typ u = if isgoal then (assert (bl = []); u) else pr_type_colon_signature pr_spc_lconstr t in
         pr_binders_arg bl ++ typ (pr_spc_lconstr t)
     in
     return (
@@ -920,31 +990,35 @@ let pr_synpure_vernac_expr v =
     return (hov 2 (keyword "Proof" ++ pr_lconstrarg c))
   | VernacAssumption ((discharge,kind),t,l) ->
     let n = List.length (List.flatten (List.map fst (List.map snd l))) in
-    let pr_params (c, (xl, t)) =
-      hov 2 (prlist_with_sep sep pr_ident_decl xl ++ spc() ++
-             str(match c with AddCoercion -> ":>" | NoCoercion -> ":") ++ spc() ++ pr_lconstr_expr t) in
-    let assumptions = prlist_with_sep spc (fun p -> hov 1 (str "(" ++ pr_params p ++ str ")")) l in
+    let assumptions = prlist_with_sep spc (fun p -> hov 1 (str "(" ++ pr_assumption_params p ++ str ")")) l in
     return (hov 2 (pr_assumption_token (n > 1) discharge kind ++
                    pr_non_empty_arg pr_assumption_inline t ++ spc() ++ assumptions))
   | VernacSymbol l ->
     let n = List.length (List.flatten (List.map fst (List.map snd l))) in
-    let pr_params (c, (xl, t)) =
-      hov 2 (prlist_with_sep sep pr_ident_decl xl ++ spc() ++
-              str(match c with AddCoercion -> ":>" | NoCoercion -> ":") ++ spc() ++ pr_lconstr_expr t) in
-    let assumptions = prlist_with_sep spc (fun p -> hov 1 (str "(" ++ pr_params p ++ str ")")) l in
+    let assumptions = prlist_with_sep spc (fun p -> hov 1 (str "(" ++ pr_assumption_params p ++ str ")")) l in
     return (hov 2 (keyword (if (n > 1) then "Symbols" else "Symbol") ++ spc() ++ assumptions))
   | VernacInductive (f,l) ->
     let pr_constructor ((attr,coe,ins),(id,c)) =
       hov 2 (pr_vernac_attributes attr ++ pr_lident id ++ pr_oc coe ins ++
              pr_spc_lconstr c)
     in
+    let pr_compact_constructor ((attr,coe,ins),(id,c) as ctor) =
+      pr_vernac_attributes attr ++ pr_lident id
+      ++ (if is_simple_inductive_constructor ctor then mt ()
+          else pr_oc coe ins ++ pr_spc_lconstr c)
+    in
     let pr_constructor_list l = match l with
       | Constructors [] -> mt()
-      | Constructors l ->
-        let fst_sep = match l with [_] -> "   " | _ -> " | " in
-        pr_com_at (begin_of_inductive l) ++
-        fnl() ++ str fst_sep ++
-        prlist_with_sep (fun _ -> fnl() ++ str" | ") pr_constructor l
+      | Constructors constructors ->
+        if use_compact_inductive_layout constructors then
+          fnl() ++ str " | "
+          ++ prlist_with_sep (fun _ -> spc () ++ str "|" ++ spc ())
+               pr_compact_constructor constructors
+        else
+          let fst_sep = match constructors with [_] -> "   " | _ -> " | " in
+          pr_com_at (begin_of_inductive constructors) ++
+          fnl() ++ str fst_sep ++
+          prlist_with_sep (fun _ -> fnl() ++ str" | ") pr_constructor constructors
       | RecordDecl (c,fs,obinder) ->
         pr_record_decl c fs obinder
     in
@@ -1378,10 +1452,12 @@ let pr_synterp_vernac_expr v =
       pr_notation_declaration ntn_decl))
     )
   | VernacReservedNotation (_, (s, l)) ->
-    return (
+    let doc =
       keyword "Reserved Notation" ++ spc() ++ pr_ast qs s ++
       pr_syntax_modifiers l
-    )
+    in
+    return (
+      if Format_policy.notation_inline () then hv 0 doc else hov 0 doc)
   | VernacDeclareCustomEntry s ->
     return (
       keyword "Declare Custom Entry " ++ Id.print s

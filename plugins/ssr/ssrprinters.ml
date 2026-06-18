@@ -109,7 +109,14 @@ let rec pr_ipat p =
   | IPatNoop -> str "-"
   | IPatAbstractVars l -> str "[:" ++ pr_list spc Id.print l ++ str "]"
   | IPatFastNondep -> str">"
-and pr_ipats ipats = pr_list spc pr_ipat ipats
+and pr_ipats ipats =
+  let rec aux = function
+    | [] -> []
+    | ip :: rest ->
+      let p = pr_ipat ip in
+      if Pp.ismt p then aux rest else p :: aux rest
+  in
+  prlist_with_sep spc (fun x -> x) (aux ipats)
 and pr_iorpat iorpat = pr_list pr_bar pr_ipats iorpat
 and pr_block = function (Prefix id) -> str"^" ++ Id.print id
                       | (SuffixId id) -> str"^~" ++ Id.print id

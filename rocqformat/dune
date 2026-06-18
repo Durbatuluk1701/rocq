@@ -1,0 +1,19 @@
+(library
+ (name rocqformat_lib)
+ (public_name rocqformat.lib)
+ (modules rocqformat_lib rocqformat_args rocqformat_layout rocqformat_project
+  rocqformat_util)
+ (libraries rocq-runtime.toplevel rocq-runtime.coqargs rocq-runtime.sysinit
+  rocq-runtime.printing rocq-runtime.lib))
+
+(executable
+ (name main)
+ (public_name rocqformat)
+ (package rocqformat)
+ (modules main)
+ (libraries rocqformat_lib))
+
+(install
+ (section libexec)
+ (package rocqformat)
+ (files (main.exe as rocqformat)))

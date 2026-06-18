@@ -120,6 +120,8 @@ val of_dispatch : dispatch -> raw_tacexpr
 
 val of_strategy_flag : strategy_flag -> raw_tacexpr
 
+val pr_strategy_flag : strategy_flag -> Pp.t
+
 val of_pose : pose -> raw_tacexpr
 
 val of_assertion : assertion -> raw_tacexpr
