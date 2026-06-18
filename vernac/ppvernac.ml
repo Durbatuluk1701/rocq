@@ -225,6 +225,10 @@ let pr_at_level = function
   | NextLevel -> keyword "at" ++ spc () ++ keyword "next" ++ spc () ++ keyword "level"
   | DefaultLevel -> mt ()
 
+let pr_level_suffix pr lev =
+  let doc = pr lev in
+  if ismt doc then doc else spc () ++ doc
+
 let level_of_pattern_level = function None -> DefaultLevel | Some n -> NumLevel n
 
 let pr_constr_as_binder_kind = let open Notation_term in function
@@ -239,14 +243,14 @@ let pr_set_entry_type prcustom pr = function
   | ETIdent -> str"ident"
   | ETName -> str"name"
   | ETGlobal -> str"global"
-  | ETPattern (b,n) -> pr_strict b ++ str"pattern" ++ pr_at_level (level_of_pattern_level n)
+  | ETPattern (b,n) -> pr_strict b ++ str"pattern" ++ pr_level_suffix pr_at_level (level_of_pattern_level n)
   | ETConstr (s,bko,lev) -> pr_notation_entry prcustom s ++ pr lev ++ pr_opt pr_constr_as_binder_kind bko
   | ETBigint -> str "bigint"
   | ETBinder true -> str "binder"
   | ETBinder false -> str "closed binder"
 
 let pr_set_simple_entry_type =
-  pr_set_entry_type pr_qualid pr_at_level
+  pr_set_entry_type pr_qualid (fun lev -> pr_level_suffix pr_at_level lev)
 
 let pr_comment pr_c = function
   | CommentConstr c -> pr_c c
