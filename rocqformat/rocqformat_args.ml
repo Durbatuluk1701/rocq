@@ -52,7 +52,6 @@ rocqformat specific options:\
 \n  --inductive-style=auto|compact|verbose  inductive constructor layout (default auto)\
 \n  --module-style=auto|compact|spaced  module/functor binder layout (default auto)\
 \n  --comment-style=auto|preserve  multiline doc comment layout (default preserve)\
-\n  --assumption-style=auto|compact|spaced  Parameter/Axiom type spacing (default auto)\
 \n  --project=FILE            read -R/-Q paths from a RocqProject/_CoqProject file\
 \n  --project-auto            search for _CoqProject near input files\
 \n  --format-project          format all .v files listed in the project file\
@@ -120,14 +119,6 @@ let parse_comment_style = function
   | "preserve" -> Rocqformat_layout.CommentPreserve
   | s ->
     Printf.eprintf "Invalid --comment-style: %s (expected auto or preserve)\n%!" s;
-    exit 1
-
-let parse_assumption_style = function
-  | "auto" -> Rocqformat_layout.AssumptionAuto
-  | "compact" -> Rocqformat_layout.AssumptionCompact
-  | "spaced" -> Rocqformat_layout.AssumptionSpaced
-  | s ->
-    Printf.eprintf "Invalid --assumption-style: %s (expected auto, compact, or spaced)\n%!" s;
     exit 1
 
 let project_file_names = ["_CoqProject"; "RocqProject"]
@@ -275,9 +266,6 @@ let rec parse acc = function
   | arg :: rest when String.length arg > 16 && String.sub arg 0 16 = "--comment-style=" ->
       let style = parse_comment_style (String.sub arg 16 (String.length arg - 16)) in
       parse (update_layout acc (fun l -> { l with comment_style = style })) rest
-  | arg :: rest when String.length arg > 19 && String.sub arg 0 19 = "--assumption-style=" ->
-      let style = parse_assumption_style (String.sub arg 19 (String.length arg - 19)) in
-      parse (update_layout acc (fun l -> { l with assumption_style = style })) rest
   | arg :: rest when String.length arg > 10 && String.sub arg 0 10 = "--project=" ->
       let file = String.sub arg 10 (String.length arg - 10) in
       parse (update_layout acc (fun l -> { l with project_file = Some file })) rest

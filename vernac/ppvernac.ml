@@ -392,22 +392,19 @@ let use_compact_module_apply () =
   | Format_policy.ModuleCompact | Format_policy.ModuleAuto -> true
   | Format_policy.ModuleSpaced -> false
 
-let use_compact_assumption_layout () =
+let pr_type_colon_signature pr_c c =
   let policy = !Format_policy.active in
-  match policy.assumption_style with
-  | Format_policy.AssumptionCompact -> true
-  | Format_policy.AssumptionSpaced -> false
-  | Format_policy.AssumptionAuto -> false
+  let sig_ind = policy.signature_break_indent in
+  let body_ind = policy.body_break_indent in
+  brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_c c
 
 let pr_assumption_params (c, (xl, t)) =
-  let after_colon =
+  let type_part =
     match c with
     | AddCoercion -> str ":>" ++ spc () ++ pr_lconstr_expr t
-    | NoCoercion ->
-      if use_compact_assumption_layout () then str ":" ++ pr_lconstr_expr t
-      else str ":" ++ spc () ++ pr_lconstr_expr t
+    | NoCoercion -> pr_type_colon_signature pr_spc_lconstr t
   in
-  hov 2 (prlist_with_sep sep pr_ident_decl xl ++ spc () ++ after_colon)
+  hov 2 (prlist_with_sep sep pr_ident_decl xl ++ type_part)
 
 let rec pr_module_ast leading_space pr_c = function
   | { loc ; v = CMident qid } ->
@@ -601,13 +598,10 @@ let pr_rec_definition (rec_order, { fname; univs; binders; rtype; body_def; nota
   ++ prlist pr_where_notation notations
 
 let pr_statement head (idpl,(bl,c)) =
-  let policy = !Format_policy.active in
-  let sig_ind = policy.signature_break_indent in
-  let body_ind = policy.body_break_indent in
   hov 2
     (head ++ spc() ++ pr_ident_decl idpl ++
      (match bl with [] -> mt() | _ -> spc() ++ pr_binders bl) ++
-     brk(1, sig_ind) ++ str":" ++ brk(0, body_ind) ++ pr_spc_lconstr c)
+     pr_type_colon_signature pr_spc_lconstr c)
 
 let pr_rew_rule (ubinders, lhs, rhs) =
   let binders = match ubinders with None -> mt()

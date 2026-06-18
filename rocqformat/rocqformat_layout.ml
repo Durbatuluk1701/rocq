@@ -38,11 +38,6 @@ type comment_style = Format_policy.comment_style =
   | CommentAuto
   | CommentPreserve
 
-type assumption_style = Format_policy.assumption_style =
-  | AssumptionAuto
-  | AssumptionCompact
-  | AssumptionSpaced
-
 type t = {
   margin : int;
   max_indent : int;
@@ -62,7 +57,6 @@ type t = {
   inductive_style : inductive_style;
   module_style : module_style;
   comment_style : comment_style;
-  assumption_style : assumption_style;
   project_file : string option;
   project_auto : bool;
 }
@@ -86,7 +80,6 @@ let default = {
   inductive_style = InductiveAuto;
   module_style = ModuleAuto;
   comment_style = CommentPreserve;
-  assumption_style = AssumptionAuto;
   project_file = None;
   project_auto = false;
 }
@@ -122,7 +115,6 @@ let apply_format_policy layout =
     inductive_style = layout.inductive_style;
     module_style = layout.module_style;
     comment_style = layout.comment_style;
-    assumption_style = layout.assumption_style;
   } in
   Format_policy.active := policy;
   Pp.preserve_comment_body :=
